@@ -1,15 +1,20 @@
 #include "core/server.hpp"
+#include "core/config.hpp"
+#include "utils/logger.hpp"
+#include "http/static_handler.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
 
 int main() {
-    constexpr std::uint16_t port = 8443;
-
     try {
-        https_server::Server server(port);
-
+        const auto config = https_server::Config::load();
+        
+        https_server::Logger::instance().set_level(config.log_level);
+        LOG_INFO("Configuration loaded successfully");
+        
+        https_server::Server server(config);
         auto& router = server.get_router();
 
         router.add_route("GET", "/", [](const https_server::http::HttpRequest& req) {
@@ -24,10 +29,15 @@ int main() {
             return response;
         });
 
+        https_server::StaticHandler static_handler(config.web_root);
+        router.add_route("GET", "/static/*", [&static_handler](const https_server::http::HttpRequest& req) {
+            return static_handler.handle(req);
+        });
+
         server.run();
 
     } catch (const std::exception& e) {
-        std::cerr << "Fatal Error: " << e.what() << std::endl;
+        LOG_ERROR("Fatal error: " + std::string(e.what()));
         return EXIT_FAILURE;
     }
 

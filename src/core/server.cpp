@@ -1,4 +1,5 @@
 #include "core/server.hpp"
+#include "utils/logger.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -36,10 +37,10 @@ extern "C" int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
                                   const OSSL_DISPATCH **out, 
                                   void **provctx);
 
-Server::Server(std::uint16_t port) 
-    : port_(port), 
+Server::Server(const ServerConfig& config) 
+    : config_(config),
       server_socket_(-1), 
-      pool_(std::thread::hardware_concurrency()),
+      pool_(config.threads == 0 ? std::thread::hardware_concurrency() : config.threads),
       ssl_ctx_(nullptr),
       default_provider_(nullptr),
       custom_provider_(nullptr)
@@ -50,9 +51,11 @@ Server::Server(std::uint16_t port)
     }
 #endif
     
+    LOG_INFO("Starting HTTPS server on port " + std::to_string(config_.port));
+    
     init_openssl();
     setup_providers();
-    load_config();
+    load_openssl_config();
     create_ssl_context();
 }
 
@@ -78,11 +81,14 @@ Server::~Server() {
 #ifdef _WIN32
     WSACleanup();
 #endif
+    
+    LOG_INFO("Server stopped");
 }
 
 void Server::init_openssl() {
     SSL_load_error_strings();	
     OpenSSL_add_ssl_algorithms();
+    LOG_DEBUG("OpenSSL initialized");
 }
 
 void Server::setup_providers() {
@@ -91,9 +97,13 @@ void Server::setup_providers() {
         log_openssl_errors();
         throw std::runtime_error("Failed to load default OpenSSL provider");
     }
+    LOG_DEBUG("Default OpenSSL provider loaded");
     
     if (OSSL_PROVIDER_add_builtin(NULL, "aes_provider", OSSL_provider_init) == 1) {
         custom_provider_ = OSSL_PROVIDER_load(NULL, "aes_provider");
+        if (custom_provider_) {
+            LOG_INFO("Custom AES provider loaded");
+        }
     }
     
     if (!custom_provider_) {
@@ -102,10 +112,13 @@ void Server::setup_providers() {
 #else
         custom_provider_ = OSSL_PROVIDER_load(NULL, "./libaes_provider.so");
 #endif
+        if (custom_provider_) {
+            LOG_INFO("External AES provider loaded");
+        }
     }
 }
 
-void Server::load_config() {
+void Server::load_openssl_config() {
     const char* root_dir = getenv("OPENSSL_ROOT_DIR");
     std::string config_path = root_dir ? 
         std::string(root_dir) + "\\bin\\cnf\\openssl.cnf" :
@@ -113,7 +126,9 @@ void Server::load_config() {
     
     if (FILE* file = fopen(config_path.c_str(), "r")) {
         fclose(file);
-        OSSL_LIB_CTX_load_config(NULL, config_path.c_str());
+        if (OSSL_LIB_CTX_load_config(NULL, config_path.c_str()) == 1) {
+            LOG_DEBUG("OpenSSL config loaded from: " + config_path);
+        }
     }
 }
 
@@ -129,15 +144,17 @@ void Server::create_ssl_context() {
         throw std::runtime_error("Unable to create SSL context");
     }
 
-    if (SSL_CTX_use_certificate_file(ssl_ctx_, "cert.pem", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_certificate_file(ssl_ctx_, config_.cert_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
         log_openssl_errors();
-        throw std::runtime_error("Failed to load certificate file");
+        throw std::runtime_error("Failed to load certificate file: " + config_.cert_file);
     }
 
-    if (SSL_CTX_use_PrivateKey_file(ssl_ctx_, "key.pem", SSL_FILETYPE_PEM) <= 0) {
+    if (SSL_CTX_use_PrivateKey_file(ssl_ctx_, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
         log_openssl_errors();
-        throw std::runtime_error("Failed to load private key file");
+        throw std::runtime_error("Failed to load private key file: " + config_.key_file);
     }
+    
+    LOG_INFO("SSL context created with cert: " + config_.cert_file + ", key: " + config_.key_file);
 }
 
 void Server::setup_socket() {
@@ -169,7 +186,7 @@ void Server::setup_socket() {
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port_);
+    server_addr.sin_port = htons(config_.port);
 
 #ifdef _WIN32
     if (bind(server_socket_, reinterpret_cast<const sockaddr*>(&server_addr), sizeof(server_addr)) == SOCKET_ERROR) {
@@ -178,7 +195,7 @@ void Server::setup_socket() {
         
         std::string error_msg = "Failed to bind socket. Error: " + std::to_string(error);
         if (error == WSAEADDRINUSE) {
-            error_msg += " (Port " + std::to_string(port_) + " already in use)";
+            error_msg += " (Port " + std::to_string(config_.port) + " already in use)";
         }
         
         throw std::runtime_error(error_msg);
@@ -212,6 +229,7 @@ void Server::handle_connection(SOCKET client_socket) {
     SSL_set_fd(ssl, static_cast<int>(client_socket));
 
     if (SSL_accept(ssl) <= 0) {
+        LOG_WARNING("SSL handshake failed");
         log_openssl_errors();
     } else {
         std::array<char, 4096> buffer{};
@@ -220,6 +238,8 @@ void Server::handle_connection(SOCKET client_socket) {
         if (bytes_read > 0) {
             const std::string raw_request(buffer.data(), bytes_read);
             const http::HttpRequest request = parse_request(raw_request);
+
+            LOG_DEBUG("Request: " + request.method + " " + request.uri);
 
             const http::HttpResponse response = router_.route_request(request);
             const std::string response_str = response.to_string();
@@ -234,6 +254,7 @@ void Server::handle_connection(SOCKET client_socket) {
 
 void Server::run() {
     setup_socket();
+    LOG_INFO("Server listening on port " + std::to_string(config_.port) + " with " + std::to_string(config_.threads == 0 ? std::thread::hardware_concurrency() : config_.threads) + " threads");
 
     while (true) {
         sockaddr_in client_addr{};
@@ -259,7 +280,7 @@ void log_openssl_errors() {
     while ((err_code = ERR_get_error())) {
         char err_msg[256];
         ERR_error_string_n(err_code, err_msg, sizeof(err_msg));
-        std::cerr << "OpenSSL error: " << err_msg << std::endl;
+        LOG_ERROR("OpenSSL: " + std::string(err_msg));
     }
 }
 

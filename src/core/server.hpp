@@ -2,6 +2,7 @@
 #define HTTPS_SERVER_SERVER_HPP
 
 #include "core/thread_pool.hpp"
+#include "core/config.hpp"
 #include "http/router.hpp"
 #include <cstdint>
 
@@ -21,7 +22,7 @@ namespace https_server {
 
 class Server {
 public:
-    explicit Server(std::uint16_t port);
+    explicit Server(const ServerConfig& config);
     ~Server();
 
     Server(const Server&) = delete;
@@ -36,12 +37,12 @@ private:
     void init_openssl();
     void cleanup_openssl();
     void setup_providers();
-    void load_config();
+    void load_openssl_config();
     void create_ssl_context();
     void setup_socket();
     void handle_connection(SOCKET client_socket);
 
-    const std::uint16_t port_;
+    const ServerConfig config_;
     SOCKET server_socket_;
     ThreadPool pool_;
     SSL_CTX* ssl_ctx_;

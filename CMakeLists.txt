@@ -12,11 +12,14 @@ add_subdirectory(src/crypto)
 add_executable(https_server 
     src/main.cpp
     src/core/server.cpp
+    src/core/config.cpp
+    src/utils/logger.cpp
+    src/http/static_handler.cpp
     src/crypto/aes_provider.cpp
 )
 
 target_compile_definitions(https_server PRIVATE OPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}")
-target_include_directories(https_server PRIVATE src ${OPENSSL_INCLUDE_DIR})
+target_include_directories(https_server PRIVATE src third_party ${OPENSSL_INCLUDE_DIR})
 target_link_libraries(https_server PRIVATE aes_asm_impl OpenSSL::SSL OpenSSL::Crypto)
 if(WIN32)
     target_link_libraries(https_server PRIVATE ws2_32)

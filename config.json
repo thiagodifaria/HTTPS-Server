@@ -1,0 +1,8 @@
+{
+    "port": 8443,
+    "threads": 0,
+    "cert_file": "cert.pem",
+    "key_file": "key.pem",
+    "web_root": "wwwroot",
+    "log_level": "INFO"
+}
