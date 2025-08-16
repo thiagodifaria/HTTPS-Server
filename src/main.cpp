@@ -3,9 +3,12 @@
 #include "utils/logger.hpp"
 #include "http/static_handler.hpp"
 #include "http/http.hpp"
+#include "nlohmann/json.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <cstdlib>
+
+using json = nlohmann::json;
 
 int main() {
     try {
@@ -17,15 +20,44 @@ int main() {
         https_server::Server server(config);
         auto& router = server.get_router();
 
-        router.add_route("GET", "/", [](const https_server::http::HttpRequest& req) {
+        router.add_route("GET", "/", [](const https_server::http::HttpRequest&) {
             https_server::http::HttpResponse response;
             response.body = "<h1>Página Principal</h1><p>Bem-vindo ao servidor HTTPS com roteamento!</p>";
             return response;
         });
 
-        router.add_route("GET", "/about", [](const https_server::http::HttpRequest& req) {
+        router.add_route("GET", "/about", [](const https_server::http::HttpRequest&) {
             https_server::http::HttpResponse response;
             response.body = "<h1>Sobre</h1><p>Servidor desenvolvido com C++, Assembly e um provedor OpenSSL customizado.</p>";
+            return response;
+        });
+
+        router.add_route("POST", "/api/echo", [](const https_server::http::HttpRequest& req) {
+            https_server::http::HttpResponse response;
+            
+            try {
+                if (req.body.empty()) {
+                    response.status_code = 400;
+                    response.status_text = "Bad Request";
+                    response.body = R"({"error": "Empty request body"})";
+                } else {
+                    json request_json = json::parse(req.body);
+                    
+                    json response_json = request_json;
+                    response_json["received"] = true;
+                    response_json["timestamp"] = std::time(nullptr);
+                    response_json["server"] = "HTTPS Server v1.0";
+                    
+                    response.body = response_json.dump(2);
+                    response.headers["Content-Type"] = "application/json; charset=utf-8";
+                }
+            } catch (const json::exception& e) {
+                response.status_code = 400;
+                response.status_text = "Bad Request";
+                response.body = R"({"error": "Invalid JSON", "details": ")" + std::string(e.what()) + R"("})";
+                response.headers["Content-Type"] = "application/json; charset=utf-8";
+            }
+            
             return response;
         });
 

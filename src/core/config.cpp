@@ -26,9 +26,9 @@ ServerConfig Config::load(const std::string& filename) {
     
     if (j.contains("log_level")) {
         const std::string level = j["log_level"];
-        if (level == "DEBUG") config.log_level = LogLevel::DEBUG;
-        else if (level == "INFO") config.log_level = LogLevel::INFO;
-        else if (level == "WARNING") config.log_level = LogLevel::WARNING;
+        if (level == "Debug") config.log_level = LogLevel::Debug;
+        else if (level == "Info") config.log_level = LogLevel::Info;
+        else if (level == "Warning") config.log_level = LogLevel::Warning;
         else if (level == "Error") config.log_level = LogLevel::Error;
     }
     

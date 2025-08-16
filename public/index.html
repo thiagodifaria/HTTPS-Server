@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTPS Server - Performance & Security</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .hero {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 15px;
+        }
+        
+        .hero p {
+            font-size: 1.2rem;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        
+        .feature {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .feature:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        
+        .feature::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        .feature h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .feature p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+        
+        .routes-section {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .routes-section h2 {
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .routes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .route-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .route-card:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            border-color: #764ba2;
+        }
+        
+        .route-method {
+            background: #28a745;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-bottom: 8px;
+            display: inline-block;
+        }
+        
+        .route-method.post {
+            background: #007bff;
+        }
+        
+        .route-path {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .route-desc {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .api-demo {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .api-demo h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .code-block {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn:hover {
+            transform: scale(1.05);
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+            
+            .hero p {
+                font-size: 1rem;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+            
+            .hero {
+                padding: 25px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>🚀 HTTPS Server</h1>
+            <p>Servidor HTTPS de alta performance desenvolvido em C++ com assembly otimizado e provider OpenSSL customizado</p>
+        </div>
+        
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">🔒</span>
+                <h3>Segurança Avançada</h3>
+                <p>TLS 1.3, custom AES-NI provider com implementação assembly otimizada para máxima segurança e performance</p>
+            </div>
+            
+            <div class="feature">
+                <span class="feature-icon">⚡</span>
+                <h3>Performance Extrema</h3>
+                <p>Multi-threaded com buffer customizado, throughput AES de 3.7+ GB/s e SHA-256 assembly otimizado</p>
+            </div>
+            
+            <div class="feature">
+                <span class="feature-icon">🛠️</span>
+                <h3>Arquitetura Moderna</h3>
+                <p>C++17, OpenSSL 3.0, NASM assembly, sistema de logging profissional e APIs RESTful com JSON</p>
+            </div>
+        </div>
+        
+        <div class="routes-section">
+            <h2>🌐 Rotas Disponíveis</h2>
+            <div class="routes-grid">
+                <a href="/" class="route-card">
+                    <div class="route-method">GET</div>
+                    <div class="route-path">/</div>
+                    <div class="route-desc">Página Principal</div>
+                </a>
+                
+                <a href="/about" class="route-card">
+                    <div class="route-method">GET</div>
+                    <div class="route-path">/about</div>
+                    <div class="route-desc">Informações do Servidor</div>
+                </a>
+                
+                <div class="route-card">
+                    <div class="route-method post">POST</div>
+                    <div class="route-path">/api/echo</div>
+                    <div class="route-desc">API Echo JSON</div>
+                </div>
+                
+                <a href="/static/" class="route-card">
+                    <div class="route-method">GET</div>
+                    <div class="route-path">/static/*</div>
+                    <div class="route-desc">Arquivos Estáticos</div>
+                </a>
+            </div>
+        </div>
+        
+        <div class="api-demo">
+            <h3>📡 Teste da API JSON</h3>
+            <p>Exemplo de requisição POST para /api/echo:</p>
+            <div class="code-block">
+curl -X POST https://localhost:8443/api/echo \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello World", "timestamp": 1234567890}'
+            </div>
+            <button class="btn" onclick="testAPI()">Testar API</button>
+            <div id="api-result" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('api-result');
+            
+            try {
+                const response = await fetch('/api/echo', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: "Hello from browser!",
+                        timestamp: Math.floor(Date.now() / 1000),
+                        user_agent: navigator.userAgent
+                    })
+                });
+                
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <div class="code-block">
+                        <strong>Response:</strong><br>
+                        ${JSON.stringify(data, null, 2)}
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="color: red; padding: 10px; background: #ffe6e6; border-radius: 5px;">
+                        Erro: ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

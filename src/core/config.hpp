@@ -13,7 +13,7 @@ struct ServerConfig {
     std::string cert_file = "cert.pem";
     std::string key_file = "key.pem";
     std::string web_root = "wwwroot";
-    LogLevel log_level = LogLevel::INFO;
+    LogLevel log_level = LogLevel::Info;
 };
 
 class Config {

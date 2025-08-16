@@ -1,13 +1,19 @@
+#ifdef _WIN32
+#define NOMINMAX
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include "core/server.hpp"
 #include "utils/logger.hpp"
+#include "utils/buffer.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <system_error>
-#include <array>
-#include <sstream>
 #include <thread>
 #include <string>
+#include <sstream>
+#include <algorithm>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/provider.h>
@@ -30,7 +36,7 @@ void close_socket(SOCKET s);
 #else
 void close_socket(SOCKET s);
 #endif
-http::HttpRequest parse_request(const std::string& raw_request);
+http::HttpRequest parse_request(const Buffer& buffer);
 
 extern "C" int OSSL_provider_init(const OSSL_CORE_HANDLE *handle, 
                                   const OSSL_DISPATCH *in, 
@@ -232,13 +238,22 @@ void Server::handle_connection(SOCKET client_socket) {
         LOG_WARNING("SSL handshake failed");
         log_openssl_errors();
     } else {
-        std::array<char, 4096> buffer{};
-        const int bytes_read = SSL_read(ssl, buffer.data(), static_cast<int>(buffer.size()));
+        Buffer buffer;
+        
+        while (true) {
+            const int bytes_read = SSL_read(ssl, buffer.write_ptr(), 
+                                          static_cast<int>(buffer.writable_bytes()));
+            if (bytes_read <= 0) break;
+            
+            buffer.has_written(bytes_read);
+            
+            if (buffer.find_crlf_crlf() != SIZE_MAX) break;
+            
+            buffer.ensure_capacity(4096);
+        }
 
-        if (bytes_read > 0) {
-            const std::string raw_request(buffer.data(), bytes_read);
-            const http::HttpRequest request = parse_request(raw_request);
-
+        if (buffer.readable_bytes() > 0) {
+            const http::HttpRequest request = parse_request(buffer);
             LOG_DEBUG("Request: " + request.method + " " + request.uri);
 
             const http::HttpResponse response = router_.route_request(request);
@@ -290,18 +305,22 @@ void close_socket(const SOCKET s) { closesocket(s); }
 void close_socket(const SOCKET s) { close(s); }
 #endif
 
-http::HttpRequest parse_request(const std::string& raw_request) {
+http::HttpRequest parse_request(const Buffer& buffer) {
     http::HttpRequest request;
-    std::stringstream request_stream(raw_request);
+    const auto view = buffer.readable_view();
+    std::string raw_request(view);
+    std::istringstream request_stream(raw_request);
     std::string line;
 
     if (std::getline(request_stream, line)) {
         if (!line.empty() && line.back() == '\r') {
             line.pop_back();
         }
-        std::stringstream request_line_stream(line);
+        std::istringstream request_line_stream(line);
         request_line_stream >> request.method >> request.uri >> request.http_version;
     }
+
+    size_t content_length = 0;
 
     while (std::getline(request_stream, line) && !line.empty() && line != "\r") {
         if (!line.empty() && line.back() == '\r') {
@@ -312,8 +331,22 @@ http::HttpRequest parse_request(const std::string& raw_request) {
             const std::string key = line.substr(0, colon_pos);
             const std::string value = line.substr(colon_pos + 2);
             request.headers[key] = value;
+            
+            if (key == "Content-Length") {
+                content_length = std::stoul(value);
+            }
         }
     }
+
+    if (content_length > 0) {
+        const size_t headers_size = raw_request.find("\r\n\r\n") + 4;
+        if (headers_size < raw_request.size()) {
+            const size_t body_available = raw_request.size() - headers_size;
+            const size_t body_size = (std::min)(content_length, body_available);
+            request.body = raw_request.substr(headers_size, body_size);
+        }
+    }
+
     return request;
 }
 

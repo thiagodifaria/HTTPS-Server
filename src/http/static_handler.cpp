@@ -12,8 +12,8 @@ StaticHandler::StaticHandler(const std::string& web_root)
 }
 
 void StaticHandler::init_mime_types() {
-    mime_types_[".html"] = "text/html";
-    mime_types_[".htm"] = "text/html";
+    mime_types_[".html"] = "text/html; charset=utf-8";
+    mime_types_[".htm"] = "text/html; charset=utf-8";
     mime_types_[".css"] = "text/css";
     mime_types_[".js"] = "application/javascript";
     mime_types_[".json"] = "application/json";
@@ -23,12 +23,16 @@ void StaticHandler::init_mime_types() {
     mime_types_[".gif"] = "image/gif";
     mime_types_[".ico"] = "image/x-icon";
     mime_types_[".txt"] = "text/plain";
+    mime_types_[".pdf"] = "application/pdf";
+    mime_types_[".svg"] = "image/svg+xml";
+    mime_types_[".woff"] = "font/woff";
+    mime_types_[".woff2"] = "font/woff2";
 }
 
 http::HttpResponse StaticHandler::handle(const http::HttpRequest& request) {
     http::HttpResponse response;
     
-    std::string file_path = request.uri.substr(7);
+    std::string file_path = request.uri;
     if (file_path.empty() || file_path == "/") {
         file_path = "/index.html";
     }
@@ -38,7 +42,24 @@ http::HttpResponse StaticHandler::handle(const http::HttpRequest& request) {
     if (!is_safe_path(file_path)) {
         response.status_code = 403;
         response.status_text = "Forbidden";
-        response.body = "<h1>403 Forbidden</h1>";
+        response.body = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>403 Forbidden</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #e74c3c; }
+        p { color: #666; }
+    </style>
+</head>
+<body>
+    <h1>403 - Acesso Negado</h1>
+    <p>Você não tem permissão para acessar este arquivo.</p>
+</body>
+</html>
+        )";
+        response.headers["Content-Type"] = "text/html; charset=utf-8";
         return response;
     }
     
@@ -48,7 +69,27 @@ http::HttpResponse StaticHandler::handle(const http::HttpRequest& request) {
     if (!file.is_open()) {
         response.status_code = 404;
         response.status_text = "Not Found";
-        response.body = "<h1>404 Not Found</h1>";
+        response.body = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>404 Not Found</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        h1 { color: #e74c3c; }
+        p { color: #666; }
+        a { color: #3498db; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>404 - Arquivo Não Encontrado</h1>
+    <p>O arquivo solicitado não foi encontrado no servidor.</p>
+    <p><a href="/">← Voltar à página inicial</a></p>
+</body>
+</html>
+        )";
+        response.headers["Content-Type"] = "text/html; charset=utf-8";
         return response;
     }
     

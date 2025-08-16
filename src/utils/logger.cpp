@@ -27,7 +27,7 @@ void Logger::log(LogLevel level, const std::string& message) {
     std::stringstream ss;
     ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
     
-    const char* level_str[] = {"DEBUG", "INFO", "WARNING", "ERROR"};
+    const char* level_str[] = {"Debug", "Info", "Warning", "Error"};
     
     std::cout << "[" << ss.str() << "] [" << level_str[static_cast<int>(level)] << "] " << message << std::endl;
 }

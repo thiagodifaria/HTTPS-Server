@@ -8,9 +8,9 @@
 namespace https_server {
 
 enum class LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARNING = 2,
+    Debug = 0,
+    Info = 1,
+    Warning = 2,
     Error = 3
 };
 
@@ -28,13 +28,13 @@ private:
     Logger() = default;
     
     std::mutex mutex_;
-    LogLevel level_ = LogLevel::INFO;
+    LogLevel level_ = LogLevel::Info;
     std::ofstream file_;
 };
 
-#define LOG_DEBUG(msg) https_server::Logger::instance().log(https_server::LogLevel::DEBUG, msg)
-#define LOG_INFO(msg) https_server::Logger::instance().log(https_server::LogLevel::INFO, msg)
-#define LOG_WARNING(msg) https_server::Logger::instance().log(https_server::LogLevel::WARNING, msg)
+#define LOG_DEBUG(msg) https_server::Logger::instance().log(https_server::LogLevel::Debug, msg)
+#define LOG_INFO(msg) https_server::Logger::instance().log(https_server::LogLevel::Info, msg)
+#define LOG_WARNING(msg) https_server::Logger::instance().log(https_server::LogLevel::Warning, msg)
 #define LOG_ERROR(msg) https_server::Logger::instance().log(https_server::LogLevel::Error, msg)
 
 } // namespace https_server
