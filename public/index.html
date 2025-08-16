@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HTTPS Server - Performance & Security</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
     <div class="container">
@@ -54,10 +54,10 @@
                     <div class="route-desc">API Echo JSON</div>
                 </div>
                 
-                <a href="/static/" class="route-card">
+                <a href="/test.html" class="route-card">
                     <div class="route-method">GET</div>
-                    <div class="route-path">/static/*</div>
-                    <div class="route-desc">Arquivos Estáticos</div>
+                    <div class="route-path">/test.html</div>
+                    <div class="route-desc">Teste de Arquivo</div>
                 </a>
             </div>
         </div>
@@ -66,7 +66,7 @@
             <h3>📡 Teste da API JSON</h3>
             <p>Exemplo de requisição POST para /api/echo:</p>
             <div class="code-block">
-curl -X POST https://localhost:8443/api/echo \
+curl -k -X POST https://localhost:8443/api/echo \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello World", "timestamp": 1234567890}'
             </div>
@@ -78,6 +78,7 @@ curl -X POST https://localhost:8443/api/echo \
     <script>
         async function testAPI() {
             const resultDiv = document.getElementById('api-result');
+            resultDiv.innerHTML = '<div style="color: #666; font-style: italic;">Enviando requisição...</div>';
             
             try {
                 const response = await fetch('/api/echo', {
@@ -88,22 +89,32 @@ curl -X POST https://localhost:8443/api/echo \
                     body: JSON.stringify({
                         message: "Hello from browser!",
                         timestamp: Math.floor(Date.now() / 1000),
-                        user_agent: navigator.userAgent
+                        user_agent: navigator.userAgent.substring(0, 50) + "..."
                     })
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    throw new Error('Resposta não é JSON válido');
+                }
                 
                 const data = await response.json();
                 
                 resultDiv.innerHTML = `
                     <div class="code-block">
-                        <strong>Response:</strong><br>
+                        <strong>✅ Response (${response.status}):</strong><br>
                         ${JSON.stringify(data, null, 2)}
                     </div>
                 `;
             } catch (error) {
+                console.error('Erro na API:', error);
                 resultDiv.innerHTML = `
                     <div class="error-message">
-                        Erro: ${error.message}
+                        ❌ Erro: ${error.message}
                     </div>
                 `;
             }

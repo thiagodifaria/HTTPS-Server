@@ -15,6 +15,8 @@
 #include <cstring>
 #include <algorithm>
 
+#pragma warning(disable: 4996)
+
 extern "C" {
     void p256_mul_mont(std::uint64_t res[4], const std::uint64_t a[4], const std::uint64_t b[4]);
     void p256_sqr_mont(std::uint64_t res[4], const std::uint64_t a[4]);
@@ -71,7 +73,6 @@ static int aes_einit(void *vctx, const unsigned char *key, size_t keylen,
     return 1;
 }
 
-// SHA-256 functions (unchanged)
 static void *sha256_newctx(void*) {
     auto *ctx = new prov_sha256_ctx();
     ctx->hash.resize(8);
@@ -229,7 +230,6 @@ static int p256_derive(void *vctx, unsigned char *secret, size_t *secretlen,
     return 1;
 }
 
-// Dispatch tables
 static const OSSL_DISPATCH aes128_ecb_functions[] = {
     { OSSL_FUNC_CIPHER_NEWCTX, reinterpret_cast<void (*)(void)>(aes_newctx) },
     { OSSL_FUNC_CIPHER_FREECTX, reinterpret_cast<void (*)(void)>(aes_freectx) },

@@ -1,6 +1,12 @@
 add_library(aes_provider SHARED aes_provider.cpp)
 
-target_link_libraries(aes_provider PRIVATE aes_asm_impl sha256_asm_impl)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    set(SHA256_IMPL sha256_neon_impl)
+else()
+    set(SHA256_IMPL sha256_asm_impl)
+endif()
+
+target_link_libraries(aes_provider PRIVATE aes_asm_impl ${SHA256_IMPL} p256_asm_impl)
 target_link_libraries(aes_provider PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(aes_provider PRIVATE .. ${OPENSSL_INCLUDE_DIR})
 

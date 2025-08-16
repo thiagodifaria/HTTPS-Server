@@ -26,7 +26,6 @@ bool test_modular_arithmetic() {
     std::uint64_t a[4] = {0x0123456789abcdef, 0xfedcba9876543210, 0x1111111111111111, 0x2222222222222222};
     std::uint64_t b[4] = {0xaaaaaaaaaaaaaaaa, 0xbbbbbbbbbbbbbbbb, 0xcccccccccccccccc, 0xdddddddddddddddd};
     std::uint64_t result[4];
-    std::uint64_t expected[4];
     
     std::cout << "Testing P-256 modular addition..." << std::endl;
     p256_add_mod(result, a, b);
@@ -50,7 +49,6 @@ bool test_modular_arithmetic() {
 
 bool test_field_properties() {
     std::uint64_t zero[4] = {0, 0, 0, 0};
-    std::uint64_t one[4] = {1, 0, 0, 0};
     std::uint64_t a[4] = {0x0123456789abcdef, 0xfedcba9876543210, 0x1111111111111111, 0x2222222222222222};
     std::uint64_t result[4];
     std::uint64_t temp[4];
@@ -75,7 +73,7 @@ bool test_field_properties() {
     return true;
 }
 
-} // anonymous namespace
+}
 
 int main() {
     std::cout << "P-256 Assembly Implementation Tests" << std::endl;
