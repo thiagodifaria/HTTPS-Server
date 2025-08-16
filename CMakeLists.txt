@@ -9,25 +9,57 @@ find_package(OpenSSL REQUIRED)
 
 add_subdirectory(src/crypto)
 
+add_library(aes_asm_impl src/crypto/asm/x86_64/aes_ni.asm)
+add_library(sha256_asm_impl src/crypto/asm/x86_64/sha256_avx.asm)
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    enable_language(ASM)
+    add_library(sha256_neon_impl src/crypto/asm/arm64/sha256_neon.S)
+    set(SHA256_IMPL sha256_neon_impl)
+else()
+    set(SHA256_IMPL sha256_asm_impl)
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+    add_library(fast_memory_impl src/utils/asm/x86_64/memory_avx2.asm)
+    set(HAS_FAST_MEMORY TRUE)
+else()
+    set(HAS_FAST_MEMORY FALSE)
+endif()
+
+add_library(p256_asm_impl src/crypto/asm/x86_64/p256_avx2.asm)
+
 add_executable(https_server 
     src/main.cpp
     src/core/server.cpp
     src/core/config.cpp
+    src/core/event_loop.cpp
     src/utils/logger.cpp
+    src/http/http.cpp
     src/http/static_handler.cpp
     src/crypto/aes_provider.cpp
 )
 
 target_compile_definitions(https_server PRIVATE OPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}")
 target_include_directories(https_server PRIVATE src third_party ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(https_server PRIVATE aes_asm_impl sha256_asm_impl OpenSSL::SSL OpenSSL::Crypto)
+
+target_link_libraries(https_server PRIVATE 
+    aes_asm_impl 
+    ${SHA256_IMPL}
+    p256_asm_impl
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+)
+
+if(HAS_FAST_MEMORY)
+    target_link_libraries(https_server PRIVATE fast_memory_impl)
+    target_compile_definitions(https_server PRIVATE HAS_FAST_MEMORY=1)
+endif()
+
 if(WIN32)
     target_link_libraries(https_server PRIVATE ws2_32)
     target_link_options(https_server PRIVATE /LARGEADDRESSAWARE)
 endif()
-
-add_library(aes_asm_impl src/crypto/asm/x86_64/aes_ni.asm)
-add_library(sha256_asm_impl src/crypto/asm/x86_64/sha256_avx.asm)
 
 add_executable(unit_test_aes tests/unit/test_crypto_aes.cpp)
 target_include_directories(unit_test_aes PRIVATE src ${OPENSSL_INCLUDE_DIR})
@@ -35,10 +67,14 @@ target_link_libraries(unit_test_aes PRIVATE aes_asm_impl OpenSSL::SSL OpenSSL::C
 
 add_executable(unit_test_sha256 tests/unit/test_crypto_sha256.cpp)
 target_include_directories(unit_test_sha256 PRIVATE src ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(unit_test_sha256 PRIVATE sha256_asm_impl OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(unit_test_sha256 PRIVATE ${SHA256_IMPL} OpenSSL::SSL OpenSSL::Crypto)
 if(WIN32)
     target_link_options(unit_test_sha256 PRIVATE /LARGEADDRESSAWARE)
 endif()
+
+add_executable(unit_test_p256 tests/unit/test_crypto_p256.cpp)
+target_include_directories(unit_test_p256 PRIVATE src ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(unit_test_p256 PRIVATE p256_asm_impl OpenSSL::SSL OpenSSL::Crypto)
 
 add_executable(benchmark_aes tests/perf/benchmark_aes.cpp)
 target_include_directories(benchmark_aes PRIVATE src ${OPENSSL_INCLUDE_DIR})
@@ -46,41 +82,89 @@ target_link_libraries(benchmark_aes PRIVATE aes_asm_impl OpenSSL::SSL OpenSSL::C
 
 add_executable(benchmark_sha256 tests/perf/benchmark_sha256.cpp)
 target_include_directories(benchmark_sha256 PRIVATE src ${OPENSSL_INCLUDE_DIR})
-target_link_libraries(benchmark_sha256 PRIVATE sha256_asm_impl OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(benchmark_sha256 PRIVATE ${SHA256_IMPL} OpenSSL::SSL OpenSSL::Crypto)
 if(WIN32)
     target_link_options(benchmark_sha256 PRIVATE /LARGEADDRESSAWARE)
+endif()
+
+add_executable(benchmark_p256 tests/perf/benchmark_p256.cpp)
+target_include_directories(benchmark_p256 PRIVATE src ${OPENSSL_INCLUDE_DIR})
+target_link_libraries(benchmark_p256 PRIVATE p256_asm_impl OpenSSL::SSL OpenSSL::Crypto)
+
+if(HAS_FAST_MEMORY)
+    add_executable(test_fast_memory tests/unit/test_fast_memory.cpp)
+    target_include_directories(test_fast_memory PRIVATE src)
+    target_link_libraries(test_fast_memory PRIVATE fast_memory_impl)
+    target_compile_definitions(test_fast_memory PRIVATE HAS_FAST_MEMORY=1)
 endif()
 
 if(MSVC)
     target_compile_options(https_server PRIVATE /W4 /permissive-)
     target_compile_options(unit_test_aes PRIVATE /W4 /permissive-)
     target_compile_options(unit_test_sha256 PRIVATE /W4 /permissive-)
+    target_compile_options(unit_test_p256 PRIVATE /W4 /permissive-)
     target_compile_options(benchmark_aes PRIVATE /W4 /permissive-)
     target_compile_options(benchmark_sha256 PRIVATE /W4 /permissive-)
+    target_compile_options(benchmark_p256 PRIVATE /W4 /permissive-)
+    
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
         target_compile_options(https_server PRIVATE /O2 /DNDEBUG)
         target_compile_options(unit_test_aes PRIVATE /O2 /DNDEBUG)
         target_compile_options(unit_test_sha256 PRIVATE /O2 /DNDEBUG)
+        target_compile_options(unit_test_p256 PRIVATE /O2 /DNDEBUG)
         target_compile_options(benchmark_aes PRIVATE /O2 /DNDEBUG)
         target_compile_options(benchmark_sha256 PRIVATE /O2 /DNDEBUG)
+        target_compile_options(benchmark_p256 PRIVATE /O2 /DNDEBUG)
     endif()
 else()
-    target_compile_options(https_server PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
-    target_compile_options(unit_test_aes PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
-    target_compile_options(unit_test_sha256 PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
-    target_compile_options(benchmark_aes PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
-    target_compile_options(benchmark_sha256 PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+    set(COMMON_FLAGS -Wall -Wextra -Wpedantic -Wconversion)
+    
+    target_compile_options(https_server PRIVATE ${COMMON_FLAGS})
+    target_compile_options(unit_test_aes PRIVATE ${COMMON_FLAGS})
+    target_compile_options(unit_test_sha256 PRIVATE ${COMMON_FLAGS})
+    target_compile_options(unit_test_p256 PRIVATE ${COMMON_FLAGS})
+    target_compile_options(benchmark_aes PRIVATE ${COMMON_FLAGS})
+    target_compile_options(benchmark_sha256 PRIVATE ${COMMON_FLAGS})
+    target_compile_options(benchmark_p256 PRIVATE ${COMMON_FLAGS})
+    
     if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-        target_compile_options(https_server PRIVATE -g)
-        target_compile_options(benchmark_aes PRIVATE -g)
-        target_compile_options(unit_test_aes PRIVATE -g)
-        target_compile_options(unit_test_sha256 PRIVATE -g)
-        target_compile_options(benchmark_sha256 PRIVATE -g)
+        set(DEBUG_FLAGS -g)
+        target_compile_options(https_server PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(benchmark_aes PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(unit_test_aes PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(unit_test_sha256 PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(unit_test_p256 PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(benchmark_sha256 PRIVATE ${DEBUG_FLAGS})
+        target_compile_options(benchmark_p256 PRIVATE ${DEBUG_FLAGS})
     elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-        target_compile_options(https_server PRIVATE -O3 -DNDEBUG)
-        target_compile_options(benchmark_aes PRIVATE -O3 -DNDEBUG)
-        target_compile_options(unit_test_aes PRIVATE -O3 -DNDEBUG)
-        target_compile_options(unit_test_sha256 PRIVATE -O3 -DNDEBUG)
-        target_compile_options(benchmark_sha256 PRIVATE -O3 -DNDEBUG)
+        set(RELEASE_FLAGS -O3 -DNDEBUG)
+        target_compile_options(https_server PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(benchmark_aes PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(unit_test_aes PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(unit_test_sha256 PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(unit_test_p256 PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(benchmark_sha256 PRIVATE ${RELEASE_FLAGS})
+        target_compile_options(benchmark_p256 PRIVATE ${RELEASE_FLAGS})
     endif()
+endif()
+
+if(HAS_FAST_MEMORY)
+    if(MSVC)
+        target_compile_options(test_fast_memory PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(test_fast_memory PRIVATE ${COMMON_FLAGS})
+    endif()
+endif()
+
+message(STATUS "HTTPS Server Build Configuration:")
+message(STATUS "  Processor: ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "  Build Type: Release")
+message(STATUS "  OpenSSL Version: ${OPENSSL_VERSION}")
+message(STATUS "  SHA-256 Implementation: ${SHA256_IMPL}")
+message(STATUS "  Fast Memory Operations: ${HAS_FAST_MEMORY}")
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    message(STATUS "  ARM64 NEON optimizations enabled")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+    message(STATUS "  x86_64 AVX2/AES-NI optimizations enabled")
 endif()

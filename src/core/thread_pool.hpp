@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <functional>
 #include <atomic>
+#include <chrono>
 
 namespace https_server {
 
@@ -34,14 +35,7 @@ public:
     }
 
     ~ThreadPool() {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            stop_ = true;
-        }
-        condition_.notify_all();
-        for (std::thread &worker : workers_) {
-            worker.join();
-        }
+        shutdown();
     }
 
     ThreadPool(const ThreadPool&) = delete;
@@ -58,10 +52,40 @@ public:
         condition_.notify_one();
     }
 
+    void shutdown(const std::chrono::milliseconds& timeout = std::chrono::milliseconds(5000)) {
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            stop_ = true;
+        }
+        condition_.notify_all();
+        
+        const auto start_time = std::chrono::steady_clock::now();
+        for (std::thread &worker : workers_) {
+            if (worker.joinable()) {
+                const auto elapsed = std::chrono::steady_clock::now() - start_time;
+                if (elapsed < timeout) {
+                    worker.join();
+                } else {
+                    worker.detach();
+                }
+            }
+        }
+        workers_.clear();
+    }
+
+    size_t pending_tasks() const {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        return tasks_.size();
+    }
+
+    bool is_stopped() const {
+        return stop_;
+    }
+
 private:
     std::vector<std::thread> workers_;
     std::queue<std::function<void()>> tasks_;
-    std::mutex queue_mutex_;
+    mutable std::mutex queue_mutex_;
     std::condition_variable condition_;
     std::atomic<bool> stop_;
 };

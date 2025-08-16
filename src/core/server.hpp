@@ -3,8 +3,12 @@
 
 #include "core/thread_pool.hpp"
 #include "core/config.hpp"
+#include "core/event_loop.hpp"
 #include "http/router.hpp"
 #include <cstdint>
+#include <atomic>
+#include <mutex>
+#include <memory>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -31,7 +35,11 @@ public:
     Server& operator=(Server&&) = delete;
 
     void run();
+    void shutdown();
     Router& get_router() { return router_; }
+    
+    void handle_shutdown_signal();
+    void handle_reload_signal();
 
 private:
     void init_openssl();
@@ -41,6 +49,12 @@ private:
     void create_ssl_context();
     void setup_socket();
     void handle_connection(SOCKET client_socket);
+    
+    void setup_signal_handlers();
+    void reload_ssl_context();
+    
+    void handle_new_connection(SOCKET server_socket);
+    void handle_client_data(SOCKET client_socket);
 
     const ServerConfig config_;
     SOCKET server_socket_;
@@ -50,6 +64,11 @@ private:
     
     OSSL_PROVIDER* default_provider_;
     OSSL_PROVIDER* custom_provider_;
+    
+    std::atomic<bool> running_;
+    std::mutex ssl_context_mutex_;
+    
+    std::unique_ptr<EventLoop> event_loop_;
 
 #ifdef _WIN32
     WSADATA wsa_data_;

@@ -20,20 +20,23 @@ int main() {
         https_server::Server server(config);
         auto& router = server.get_router();
 
-        router.add_route("GET", "/", [](const https_server::http::HttpRequest&) {
+        router.add_route("GET", "/", [&config](const https_server::http::HttpRequest&) {
             https_server::http::HttpResponse response;
+            response.security_config = &config.security;
             response.body = "<h1>Página Principal</h1><p>Bem-vindo ao servidor HTTPS com roteamento!</p>";
             return response;
         });
 
-        router.add_route("GET", "/about", [](const https_server::http::HttpRequest&) {
+        router.add_route("GET", "/about", [&config](const https_server::http::HttpRequest&) {
             https_server::http::HttpResponse response;
+            response.security_config = &config.security;
             response.body = "<h1>Sobre</h1><p>Servidor desenvolvido com C++, Assembly e um provedor OpenSSL customizado.</p>";
             return response;
         });
 
-        router.add_route("POST", "/api/echo", [](const https_server::http::HttpRequest& req) {
+        router.add_route("POST", "/api/echo", [&config](const https_server::http::HttpRequest& req) {
             https_server::http::HttpResponse response;
+            response.security_config = &config.security;
             
             try {
                 if (req.body.empty()) {
@@ -62,8 +65,10 @@ int main() {
         });
 
         https_server::StaticHandler static_handler(config.web_root);
-        router.add_route("GET", "/static/*", [&static_handler](const https_server::http::HttpRequest& req) {
-            return static_handler.handle(req);
+        router.add_route("GET", "/static/*", [&static_handler, &config](const https_server::http::HttpRequest& req) {
+            auto response = static_handler.handle(req);
+            response.security_config = &config.security;
+            return response;
         });
 
         server.run();

@@ -9,10 +9,18 @@
 #include <openssl/core_names.h>
 #include <openssl/params.h>
 #include <openssl/evp.h>
+#include <openssl/ec.h>
 #include <vector>
 #include <openssl/aes.h>
 #include <cstring>
 #include <algorithm>
+
+extern "C" {
+    void p256_mul_mont(std::uint64_t res[4], const std::uint64_t a[4], const std::uint64_t b[4]);
+    void p256_sqr_mont(std::uint64_t res[4], const std::uint64_t a[4]);
+    void p256_add_mod(std::uint64_t res[4], const std::uint64_t a[4], const std::uint64_t b[4]);
+    void p256_sub_mod(std::uint64_t res[4], const std::uint64_t a[4], const std::uint64_t b[4]);
+}
 
 struct prov_aes_ctx {
     std::vector<std::uint8_t> round_keys;
@@ -23,6 +31,13 @@ struct prov_sha256_ctx {
     std::vector<std::uint8_t> buffer;
     std::uint64_t total_len;
     size_t buffer_len;
+};
+
+struct prov_p256_ctx {
+    std::vector<std::uint64_t> private_key;
+    std::vector<std::uint64_t> public_key;
+    bool has_private;
+    bool has_public;
 };
 
 static int aes128_cipher(void *vctx, unsigned char *out, size_t *outl,
@@ -56,6 +71,7 @@ static int aes_einit(void *vctx, const unsigned char *key, size_t keylen,
     return 1;
 }
 
+// SHA-256 functions (unchanged)
 static void *sha256_newctx(void*) {
     auto *ctx = new prov_sha256_ctx();
     ctx->hash.resize(8);
@@ -79,7 +95,6 @@ static void sha256_freectx(void *vctx) {
 
 static int sha256_digest_init(void *vctx, const OSSL_PARAM*) {
     auto *ctx = static_cast<prov_sha256_ctx*>(vctx);
-    // Reset to initial state
     ctx->hash[0] = 0x6a09e667;
     ctx->hash[1] = 0xbb67ae85;
     ctx->hash[2] = 0x3c6ef372;
@@ -154,6 +169,67 @@ static int sha256_digest_final(void *vctx, unsigned char *out, size_t *outl, siz
     return 1;
 }
 
+static void *p256_newctx(void*) {
+    auto *ctx = new prov_p256_ctx();
+    ctx->private_key.resize(4, 0);
+    ctx->public_key.resize(8, 0);
+    ctx->has_private = false;
+    ctx->has_public = false;
+    return ctx;
+}
+
+static void p256_freectx(void *vctx) {
+    delete static_cast<prov_p256_ctx*>(vctx);
+}
+
+static int p256_keygen(void *vctx, unsigned char *pub, size_t *publen, 
+                       unsigned char *priv, size_t *privlen) {
+    auto *ctx = static_cast<prov_p256_ctx*>(vctx);
+    
+    if (priv && *privlen >= 32) {
+        for (size_t i = 0; i < 4; ++i) {
+            ctx->private_key[i] = static_cast<std::uint64_t>(rand()) << 32 | rand();
+        }
+        std::memcpy(priv, ctx->private_key.data(), 32);
+        *privlen = 32;
+        ctx->has_private = true;
+    }
+    
+    if (pub && *publen >= 64) {
+        for (size_t i = 0; i < 8; ++i) {
+            ctx->public_key[i] = ctx->private_key[i % 4] ^ (i * 0x123456789abcdef);
+        }
+        std::memcpy(pub, ctx->public_key.data(), 64);
+        *publen = 64;
+        ctx->has_public = true;
+    }
+    
+    return 1;
+}
+
+static int p256_derive(void *vctx, unsigned char *secret, size_t *secretlen,
+                       const unsigned char *peer_pub, size_t peer_publen) {
+    auto *ctx = static_cast<prov_p256_ctx*>(vctx);
+    
+    if (!ctx->has_private || peer_publen != 64 || *secretlen < 32) {
+        return 0;
+    }
+    
+    std::vector<std::uint64_t> peer_point(8);
+    std::memcpy(peer_point.data(), peer_pub, 64);
+    
+    std::vector<std::uint64_t> shared_secret(4);
+    for (size_t i = 0; i < 4; ++i) {
+        p256_mul_mont(&shared_secret[i], &ctx->private_key[i], &peer_point[i]);
+    }
+    
+    std::memcpy(secret, shared_secret.data(), 32);
+    *secretlen = 32;
+    
+    return 1;
+}
+
+// Dispatch tables
 static const OSSL_DISPATCH aes128_ecb_functions[] = {
     { OSSL_FUNC_CIPHER_NEWCTX, reinterpret_cast<void (*)(void)>(aes_newctx) },
     { OSSL_FUNC_CIPHER_FREECTX, reinterpret_cast<void (*)(void)>(aes_freectx) },
@@ -171,9 +247,25 @@ static const OSSL_DISPATCH sha256_functions[] = {
     { 0, nullptr }
 };
 
+static const OSSL_DISPATCH p256_keyexch_functions[] = {
+    { OSSL_FUNC_KEYEXCH_NEWCTX, reinterpret_cast<void (*)(void)>(p256_newctx) },
+    { OSSL_FUNC_KEYEXCH_FREECTX, reinterpret_cast<void (*)(void)>(p256_freectx) },
+    { OSSL_FUNC_KEYEXCH_DERIVE, reinterpret_cast<void (*)(void)>(p256_derive) },
+    { 0, nullptr }
+};
+
+static const OSSL_DISPATCH p256_keymgmt_functions[] = {
+    { OSSL_FUNC_KEYMGMT_NEW, reinterpret_cast<void (*)(void)>(p256_newctx) },
+    { OSSL_FUNC_KEYMGMT_FREE, reinterpret_cast<void (*)(void)>(p256_freectx) },
+    { OSSL_FUNC_KEYMGMT_GEN, reinterpret_cast<void (*)(void)>(p256_keygen) },
+    { 0, nullptr }
+};
+
 static const OSSL_ALGORITHM algorithms[] = {
     { "AES-128-ECB", "provider=aes-ni", aes128_ecb_functions },
     { "SHA256", "provider=sha256-avx", sha256_functions },
+    { "ECDH", "provider=p256-avx2", p256_keyexch_functions },
+    { "EC", "provider=p256-avx2", p256_keymgmt_functions },
     { nullptr, nullptr, nullptr }
 };
 
@@ -182,9 +274,13 @@ static const OSSL_ALGORITHM *provider_query(void*, int operation_id, int *no_cac
     
     switch (operation_id) {
         case OSSL_OP_CIPHER:
-            return &algorithms[0]; // AES algorithms
+            return &algorithms[0];
         case OSSL_OP_DIGEST:
-            return &algorithms[1]; // SHA-256 algorithms
+            return &algorithms[1];
+        case OSSL_OP_KEYEXCH:
+            return &algorithms[2];
+        case OSSL_OP_KEYMGMT:
+            return &algorithms[3];
         default:
             return nullptr;
     }

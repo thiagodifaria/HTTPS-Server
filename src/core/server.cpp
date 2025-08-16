@@ -6,6 +6,7 @@
 #include "core/server.hpp"
 #include "utils/logger.hpp"
 #include "utils/buffer.hpp"
+#include "utils/fast_memory.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -17,15 +18,20 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/provider.h>
-#include <openssl/applink.c>
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
+#include <signal.h>
 #pragma comment(lib, "ws2_32.lib")
+static BOOL WINAPI console_ctrl_handler(DWORD ctrl_type);
+static https_server::Server* g_server_instance = nullptr;
 #else
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <signal.h>
+static void signal_handler(int signum);
+static https_server::Server* g_server_instance = nullptr;
 #endif
 
 namespace https_server {
@@ -45,11 +51,12 @@ extern "C" int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
 
 Server::Server(const ServerConfig& config) 
     : config_(config),
-      server_socket_(-1), 
+      server_socket_(static_cast<SOCKET>(-1)), 
       pool_(config.threads == 0 ? std::thread::hardware_concurrency() : config.threads),
       ssl_ctx_(nullptr),
       default_provider_(nullptr),
-      custom_provider_(nullptr)
+      custom_provider_(nullptr),
+      running_(true)
 {
 #ifdef _WIN32
     if (WSAStartup(MAKEWORD(2, 2), &wsa_data_) != 0) {
@@ -59,13 +66,24 @@ Server::Server(const ServerConfig& config)
     
     LOG_INFO("Starting HTTPS server on port " + std::to_string(config_.port));
     
+    if (fast_memory::MemoryOps::instance().has_avx2()) {
+        LOG_INFO("AVX2 memory optimizations enabled");
+    } else {
+        LOG_INFO("Using standard memory operations (AVX2 not available)");
+    }
+    
     init_openssl();
     setup_providers();
     load_openssl_config();
     create_ssl_context();
+    setup_signal_handlers();
+    
+    event_loop_ = std::make_unique<EventLoop>();
 }
 
 Server::~Server() {
+    shutdown();
+    
     if (custom_provider_) {
         OSSL_PROVIDER_unload(custom_provider_);
     }
@@ -80,7 +98,7 @@ Server::~Server() {
     
     cleanup_openssl();
 
-    if (server_socket_ != -1) {
+    if (server_socket_ != static_cast<SOCKET>(-1)) {
         close_socket(server_socket_);
     }
     
@@ -108,7 +126,7 @@ void Server::setup_providers() {
     if (OSSL_PROVIDER_add_builtin(NULL, "aes_provider", OSSL_provider_init) == 1) {
         custom_provider_ = OSSL_PROVIDER_load(NULL, "aes_provider");
         if (custom_provider_) {
-            LOG_INFO("Custom AES provider loaded");
+            LOG_INFO("Custom AES/SHA-256 provider loaded");
         }
     }
     
@@ -119,7 +137,7 @@ void Server::setup_providers() {
         custom_provider_ = OSSL_PROVIDER_load(NULL, "./libaes_provider.so");
 #endif
         if (custom_provider_) {
-            LOG_INFO("External AES provider loaded");
+            LOG_INFO("External AES/SHA-256 provider loaded");
         }
     }
 }
@@ -160,7 +178,87 @@ void Server::create_ssl_context() {
         throw std::runtime_error("Failed to load private key file: " + config_.key_file);
     }
     
+    if (!config_.client_ca_file.empty()) {
+        LOG_INFO("Configuring mutual TLS authentication");
+        
+        if (SSL_CTX_load_verify_locations(ssl_ctx_, config_.client_ca_file.c_str(), nullptr) != 1) {
+            log_openssl_errors();
+            throw std::runtime_error("Failed to load client CA file: " + config_.client_ca_file);
+        }
+        
+        SSL_CTX_set_verify(ssl_ctx_, 
+                          SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, 
+                          nullptr);
+        
+        LOG_INFO("Mutual TLS authentication enabled");
+    }
+    
     LOG_INFO("SSL context created with cert: " + config_.cert_file + ", key: " + config_.key_file);
+}
+
+void Server::setup_signal_handlers() {
+    g_server_instance = this;
+    
+#ifdef _WIN32
+    SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
+#else
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+    sigaction(SIGHUP, &sa, nullptr);
+#endif
+    
+    LOG_DEBUG("Signal handlers configured");
+}
+
+void Server::handle_shutdown_signal() {
+    LOG_INFO("Received shutdown signal, initiating graceful shutdown");
+    running_ = false;
+}
+
+void Server::handle_reload_signal() {
+    LOG_INFO("Received reload signal, reloading SSL certificates");
+    try {
+        reload_ssl_context();
+        LOG_INFO("SSL certificates reloaded successfully");
+    } catch (const std::exception& e) {
+        LOG_ERROR("Failed to reload SSL certificates: " + std::string(e.what()));
+    }
+}
+
+void Server::reload_ssl_context() {
+    std::lock_guard<std::mutex> lock(ssl_context_mutex_);
+    
+    SSL_CTX* new_ctx = SSL_CTX_new(TLS_server_method());
+    if (!new_ctx) {
+        throw std::runtime_error("Failed to create new SSL context");
+    }
+    
+    if (SSL_CTX_use_certificate_file(new_ctx, config_.cert_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(new_ctx);
+        throw std::runtime_error("Failed to load new certificate file");
+    }
+    
+    if (SSL_CTX_use_PrivateKey_file(new_ctx, config_.key_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
+        SSL_CTX_free(new_ctx);
+        throw std::runtime_error("Failed to load new private key file");
+    }
+    
+    if (!config_.client_ca_file.empty()) {
+        if (SSL_CTX_load_verify_locations(new_ctx, config_.client_ca_file.c_str(), nullptr) != 1) {
+            SSL_CTX_free(new_ctx);
+            throw std::runtime_error("Failed to load new client CA file");
+        }
+        SSL_CTX_set_verify(new_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, nullptr);
+    }
+    
+    SSL_CTX* old_ctx = ssl_ctx_;
+    ssl_ctx_ = new_ctx;
+    SSL_CTX_free(old_ctx);
 }
 
 void Server::setup_socket() {
@@ -225,7 +323,33 @@ void Server::setup_socket() {
 #endif
 }
 
+void Server::handle_new_connection(SOCKET server_socket) {
+    sockaddr_in client_addr{};
+    socklen_t client_len = sizeof(client_addr);
+    const SOCKET client_socket = accept(server_socket, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+
+#ifdef _WIN32
+    if (client_socket == INVALID_SOCKET) {
+#else
+    if (client_socket < 0) {
+#endif
+        return;
+    }
+
+    event_loop_->add_socket(client_socket, [this](SOCKET sock) {
+        handle_client_data(sock);
+    });
+}
+
+void Server::handle_client_data(SOCKET client_socket) {
+    pool_.enqueue([this, client_socket] {
+        handle_connection(client_socket);
+    });
+}
+
 void Server::handle_connection(SOCKET client_socket) {
+    std::lock_guard<std::mutex> lock(ssl_context_mutex_);
+    
     SSL* ssl = SSL_new(ssl_ctx_);
     if (!ssl) {
         close_socket(client_socket);
@@ -245,7 +369,7 @@ void Server::handle_connection(SOCKET client_socket) {
                                           static_cast<int>(buffer.writable_bytes()));
             if (bytes_read <= 0) break;
             
-            buffer.has_written(bytes_read);
+            buffer.has_written(static_cast<size_t>(bytes_read));
             
             if (buffer.find_crlf_crlf() != SIZE_MAX) break;
             
@@ -271,22 +395,22 @@ void Server::run() {
     setup_socket();
     LOG_INFO("Server listening on port " + std::to_string(config_.port) + " with " + std::to_string(config_.threads == 0 ? std::thread::hardware_concurrency() : config_.threads) + " threads");
 
-    while (true) {
-        sockaddr_in client_addr{};
-        socklen_t client_len = sizeof(client_addr);
-        const SOCKET client_socket = accept(server_socket_, reinterpret_cast<sockaddr*>(&client_addr), &client_len);
+    event_loop_->add_socket(server_socket_, [this](SOCKET sock) {
+        handle_new_connection(sock);
+    });
+    
+    while (running_) {
+        event_loop_->run_once(100);
+    }
+    
+    LOG_INFO("Main event loop exited");
+}
 
-#ifdef _WIN32
-        if (client_socket == INVALID_SOCKET) {
-#else
-        if (client_socket < 0) {
-#endif
-            continue;
-        }
-
-        pool_.enqueue([this, client_socket] {
-            handle_connection(client_socket);
-        });
+void Server::shutdown() {
+    if (running_) {
+        running_ = false;
+        pool_.shutdown();
+        LOG_INFO("Server shutdown completed");
     }
 }
 
@@ -339,11 +463,24 @@ http::HttpRequest parse_request(const Buffer& buffer) {
     }
 
     if (content_length > 0) {
-        const size_t headers_size = raw_request.find("\r\n\r\n") + 4;
-        if (headers_size < raw_request.size()) {
-            const size_t body_available = raw_request.size() - headers_size;
-            const size_t body_size = (std::min)(content_length, body_available);
-            request.body = raw_request.substr(headers_size, body_size);
+        const char* headers_end = static_cast<const char*>(
+            fast_memory::memchr(raw_request.data(), '\r', raw_request.size())
+        );
+        
+        if (headers_end) {
+            const char* body_start = static_cast<const char*>(
+                fast_memory::memchr(headers_end, '\n', raw_request.size() - (headers_end - raw_request.data()))
+            );
+            
+            if (body_start) {
+                body_start++;
+                const size_t body_offset = body_start - raw_request.data();
+                if (body_offset < raw_request.size()) {
+                    const size_t body_available = raw_request.size() - body_offset;
+                    const size_t body_size = (std::min)(content_length, body_available);
+                    request.body = raw_request.substr(body_offset, body_size);
+                }
+            }
         }
     }
 
@@ -351,3 +488,32 @@ http::HttpRequest parse_request(const Buffer& buffer) {
 }
 
 } // namespace https_server
+
+#ifdef _WIN32
+BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
+    if (g_server_instance) {
+        switch (ctrl_type) {
+            case CTRL_C_EVENT:
+            case CTRL_BREAK_EVENT:
+            case CTRL_CLOSE_EVENT:
+                g_server_instance->handle_shutdown_signal();
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+#else
+void signal_handler(int signum) {
+    if (g_server_instance) {
+        switch (signum) {
+            case SIGINT:
+            case SIGTERM:
+                g_server_instance->handle_shutdown_signal();
+                break;
+            case SIGHUP:
+                g_server_instance->handle_reload_signal();
+                break;
+        }
+    }
+}
+#endif

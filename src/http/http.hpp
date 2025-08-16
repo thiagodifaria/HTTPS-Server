@@ -6,7 +6,10 @@
 #include <map>
 #include <sstream>
 
-namespace https_server::http {
+namespace https_server {
+    struct SecurityConfig;
+
+namespace http {
 
 struct HttpRequest {
     std::string method;
@@ -21,10 +24,15 @@ struct HttpResponse {
     std::string status_text = "OK";
     std::map<std::string, std::string> headers;
     std::string body;
+    const SecurityConfig* security_config = nullptr;
+
+    void apply_security_headers();
 
     std::string to_string() const {
         std::stringstream ss;
         ss << "HTTP/1.1 " << status_code << " " << status_text << "\r\n";
+        
+        const_cast<HttpResponse*>(this)->apply_security_headers();
         
         if (headers.find("Content-Length") == headers.end()) {
              ss << "Content-Length: " << body.length() << "\r\n";
@@ -46,6 +54,7 @@ struct HttpResponse {
     }
 };
 
-} // namespace https_server::http
+} // namespace http
+} // namespace https_server
 
 #endif // HTTPS_SERVER_HTTP_HPP
