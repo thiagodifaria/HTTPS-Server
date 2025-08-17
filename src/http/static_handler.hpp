@@ -21,7 +21,7 @@ private:
     std::string get_content_type(const std::string& file_path) const;
     bool is_safe_path(const std::string& requested_path) const;
     std::string normalize_path(const std::string& path) const;
-    std::string create_error_page(const std::string& code, const std::string& title, const std::string& message) const;
+    http::HttpResponse load_error_page(int code, const std::string& status_text);
 };
 
 }

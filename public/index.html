@@ -23,7 +23,7 @@
             <div class="feature">
                 <span class="feature-icon">⚡</span>
                 <h3>Performance Extrema</h3>
-                <p>Multi-threaded com buffer customizado, throughput AES de 3.7+ GB/s e SHA-256 assembly otimizado</p>
+                <p>Multi-threaded com buffer customizado, throughput AES de 3.51 GB/s e SHA-256 assembly otimizado</p>
             </div>
             
             <div class="feature">
@@ -45,7 +45,7 @@
                 <a href="/about" class="route-card">
                     <div class="route-method">GET</div>
                     <div class="route-path">/about</div>
-                    <div class="route-desc">Informações do Servidor</div>
+                    <div class="route-desc">Informações Técnicas</div>
                 </a>
                 
                 <div class="route-card">
@@ -73,7 +73,35 @@ curl -k -X POST https://localhost:8443/api/echo \
             <button class="btn" onclick="testAPI()">Testar API</button>
             <div id="api-result"></div>
         </div>
+
+        <div class="developer-section">
+            <h2>👨‍💻 Sobre o Desenvolvedor</h2>
+            <div class="developer-card">
+                <div class="developer-info">
+                    <h3>Thiago Di Faria</h3>
+                    <p>Desenvolvedor especializado em sistemas de alta performance com C++, assembly e criptografia avançada.</p>
+                    <div class="developer-links">
+                        <a href="https://github.com/thiagodifaria" target="_blank" class="dev-link github">
+                            <span>📱</span> GitHub
+                        </a>
+                        <a href="mailto:thiagodifaria@gmail.com" class="dev-link email">
+                            <span>✉️</span> Email
+                        </a>
+                        <a href="https://github.com/thiagodifaria/HTTPS-Server" target="_blank" class="dev-link project">
+                            <span>🚀</span> Projeto
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+    
+    <footer class="footer">
+        <div class="footer-content">
+            <p>&copy; 2025 HTTPS Server - Desenvolvido por <strong>Thiago Di Faria</strong></p>
+            <p>Performance extrema com criptografia assembly otimizada</p>
+        </div>
+    </footer>
     
     <script>
         async function testAPI() {

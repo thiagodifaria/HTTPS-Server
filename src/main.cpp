@@ -30,33 +30,11 @@ int main() {
             return response;
         });
 
-        router.add_route("GET", "/about", [&config](const https_server::http::HttpRequest&) {
-            https_server::http::HttpResponse response;
+        router.add_route("GET", "/about", [&static_handler, &config](const https_server::http::HttpRequest& req) {
+            https_server::http::HttpRequest about_req = req;
+            about_req.uri = "/about.html";
+            auto response = static_handler.handle(about_req);
             response.security_config = &config.security;
-            response.body = R"(
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sobre - HTTPS Server</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <div class="test-container">
-        <div class="card">
-            <h1>🚀 Sobre o HTTPS Server</h1>
-            <p>Servidor HTTPS desenvolvido com <strong>C++17</strong></p>
-            <p>Assembly customizado com <code>AES-NI</code> e <code>SHA-256 AVX</code></p>
-            <p>Provider OpenSSL customizado para máxima performance</p>
-            <p>Arquitetura multi-threaded com buffer de alta performance</p>
-            <a href="/" class="btn">← Voltar ao Início</a>
-        </div>
-    </div>
-</body>
-</html>
-            )";
-            response.headers["Content-Type"] = "text/html; charset=utf-8";
             return response;
         });
 
@@ -113,6 +91,12 @@ int main() {
             https_server::http::HttpRequest static_req = req;
             static_req.uri = req.uri.substr(7);
             auto response = static_handler.handle(static_req);
+            response.security_config = &config.security;
+            return response;
+        });
+
+        router.add_route("GET", "/*", [&static_handler, &config](const https_server::http::HttpRequest& req) {
+            auto response = static_handler.handle(req);
             response.security_config = &config.security;
             return response;
         });

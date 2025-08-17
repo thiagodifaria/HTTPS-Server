@@ -12,14 +12,12 @@ body {
     color: #333;
 }
 
-/* Layout Principal */
 .container {
     max-width: 1000px;
     margin: 0 auto;
     padding: 20px;
 }
 
-/* Seção Hero */
 .hero {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
@@ -172,6 +170,7 @@ body {
     padding: 30px;
     border-radius: 15px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    margin-bottom: 25px;
 }
 
 .api-demo h3 {
@@ -230,6 +229,86 @@ body {
     margin-top: 15px;
 }
 
+.developer-section {
+    background: rgba(255, 255, 255, 0.9);
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    margin-bottom: 25px;
+}
+
+.developer-section h2 {
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.developer-card {
+    background: #f8f9fa;
+    padding: 25px;
+    border-radius: 12px;
+    transition: transform 0.3s ease;
+}
+
+.developer-card:hover {
+    transform: translateY(-3px);
+}
+
+.developer-info h3 {
+    color: #667eea;
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+}
+
+.developer-info p {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 1rem;
+}
+
+.developer-links {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.dev-link {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    padding: 10px 16px;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dev-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+}
+
+.footer {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    margin-top: 40px;
+    padding: 25px;
+    border-radius: 15px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.footer-content p {
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.footer-content strong {
+    color: #667eea;
+}
+
 .test-container {
     max-width: 600px;
     margin: 50px auto;
@@ -274,6 +353,44 @@ body {
     margin-top: 15px;
 }
 
+.error-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.error-container {
+    background: rgba(255,255,255,0.95);
+    padding: 50px;
+    border-radius: 20px;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    max-width: 600px;
+    width: 100%;
+}
+
+.error-code {
+    font-size: 5rem;
+    font-weight: bold;
+    color: #e74c3c;
+    margin-bottom: 10px;
+}
+
+.error-title {
+    font-size: 2rem;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.error-message {
+    color: #666;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+    line-height: 1.6;
+}
+
 @media (max-width: 768px) {
     .container, .test-container {
         padding: 15px;
@@ -304,8 +421,16 @@ body {
         padding: 20px;
     }
     
-    .api-demo, .routes-section {
+    .api-demo, .routes-section, .developer-section {
         padding: 20px;
+    }
+    
+    .developer-links {
+        justify-content: center;
+    }
+    
+    .footer {
+        margin-top: 20px;
     }
 }
 
@@ -325,5 +450,18 @@ body {
     
     .card h1 {
         font-size: 1.6rem;
+    }
+    
+    .error-code {
+        font-size: 3rem;
+    }
+    
+    .error-title {
+        font-size: 1.5rem;
+    }
+    
+    .dev-link {
+        padding: 8px 12px;
+        font-size: 0.9rem;
     }
 }

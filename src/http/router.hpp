@@ -44,7 +44,7 @@ public:
         http::HttpResponse response;
         response.status_code = 404;
         response.status_text = "Not Found";
-        response.body = create_404_page();
+        response.body = "<h1>404 Not Found</h1>";
         response.headers["Content-Type"] = "text/html; charset=utf-8";
         return response;
     }
@@ -63,73 +63,6 @@ private:
         }
         
         return pattern == uri;
-    }
-    
-    std::string create_404_page() const {
-        return R"(
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 Not Found - HTTPS Server</title>
-    <style>
-        body { 
-            font-family: 'Segoe UI', sans-serif; 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: rgba(255,255,255,0.95);
-            padding: 40px;
-            border-radius: 20px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 500px;
-        }
-        h1 { 
-            color: #e74c3c; 
-            font-size: 4rem;
-            margin-bottom: 10px;
-        }
-        h2 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        p { 
-            color: #666; 
-            margin-bottom: 30px;
-            font-size: 1.1rem;
-        }
-        a { 
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: white;
-            padding: 12px 24px;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: transform 0.3s ease;
-            display: inline-block;
-        }
-        a:hover { 
-            transform: translateY(-2px);
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>404</h1>
-        <h2>Página Não Encontrada</h2>
-        <p>A rota solicitada não foi encontrada no servidor.</p>
-        <a href="/">← Voltar à página inicial</a>
-    </div>
-</body>
-</html>
-        )";
     }
 };
 
