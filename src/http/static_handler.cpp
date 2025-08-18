@@ -1,7 +1,9 @@
 #include "http/static_handler.hpp"
 #include "utils/logger.hpp"
+#include "utils/compression_suite.hpp"
 #include <fstream>
 #include <sstream>
+#include <vector>
 
 namespace https_server {
 
@@ -54,12 +56,19 @@ http::HttpResponse StaticHandler::handle(const http::HttpRequest& request) {
     
     std::stringstream buffer;
     buffer << file.rdbuf();
-    response.body = buffer.str();
+    std::string content = buffer.str();
     
     const std::string content_type = get_content_type(file_path);
     response.headers["Content-Type"] = content_type;
     
-    LOG_INFO("Served file: " + file_path + " (" + content_type + ")");
+    const std::string accept_encoding = get_accept_encoding(request);
+    
+    if (!try_serve_compressed(file_path, content, content_type, accept_encoding, response)) {
+        response.body = content;
+    }
+    
+    LOG_INFO("Served file: " + file_path + " (" + content_type + ", " + 
+             std::to_string(response.body.size()) + " bytes)");
     
     return response;
 }
@@ -107,6 +116,102 @@ std::string StaticHandler::normalize_path(const std::string& path) const {
         if (c == '\\') c = '/';
     }
     return normalized;
+}
+
+std::string StaticHandler::get_accept_encoding(const http::HttpRequest& request) const {
+    auto it = request.headers.find("Accept-Encoding");
+    return (it != request.headers.end()) ? it->second : "";
+}
+
+bool StaticHandler::try_serve_compressed(const std::string& file_path, 
+                                         const std::string& content,
+                                         const std::string& content_type,
+                                         const std::string& accept_encoding,
+                                         http::HttpResponse& response) {
+    if (!compression::CompressionOps::instance().should_compress(content_type, content.size())) {
+        return false;
+    }
+    
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    
+    const std::string cache_key = file_path + ":" + accept_encoding;
+    auto cache_it = compression_cache_.find(cache_key);
+    
+    if (cache_it != compression_cache_.end()) {
+        response.body = cache_it->second.data;
+        response.headers["Content-Encoding"] = cache_it->second.encoding;
+        response.headers["Vary"] = "Accept-Encoding";
+        return true;
+    }
+    
+    std::string encoding_used;
+    std::string compressed = compress_content(content, content_type, accept_encoding, encoding_used);
+    
+    if (compressed.empty() || compressed.size() >= content.size()) {
+        return false;
+    }
+    
+    CompressedCache cached_result;
+    cached_result.data = compressed;
+    cached_result.encoding = encoding_used;
+    cached_result.original_size = content.size();
+    
+    compression_cache_[cache_key] = cached_result;
+    
+    response.body = compressed;
+    response.headers["Content-Encoding"] = encoding_used;
+    response.headers["Vary"] = "Accept-Encoding";
+    
+    return true;
+}
+
+std::string StaticHandler::compress_content(const std::string& content,
+                                            const std::string& content_type,
+                                            const std::string& accept_encoding,
+                                            std::string& encoding_used) {
+    auto compression_type = compression::CompressionOps::instance()
+        .choose_best_compression(content_type, content.size(), accept_encoding);
+    
+    if (compression_type == compression::CompressionType::NONE) {
+        return "";
+    }
+    
+    std::vector<uint8_t> output_buffer(content.size() * 2);
+    size_t compressed_size = 0;
+    
+    const uint8_t* input = reinterpret_cast<const uint8_t*>(content.data());
+    
+    switch (compression_type) {
+        case compression::CompressionType::DEFLATE:
+            compressed_size = compression::CompressionOps::instance()
+                .deflate_compress_small(input, content.size(), 
+                                       output_buffer.data(), output_buffer.size());
+            encoding_used = "deflate";
+            break;
+            
+        case compression::CompressionType::LZ4:
+            compressed_size = compression::CompressionOps::instance()
+                .lz4_compress_fast(input, content.size(),
+                                  output_buffer.data(), output_buffer.size());
+            encoding_used = "gzip";
+            break;
+            
+        case compression::CompressionType::BROTLI:
+            compressed_size = compression::CompressionOps::instance()
+                .brotli_compress_web(input, content.size(),
+                                    output_buffer.data(), output_buffer.size());
+            encoding_used = "br";
+            break;
+            
+        default:
+            return "";
+    }
+    
+    if (compressed_size == 0 || compressed_size >= content.size()) {
+        return "";
+    }
+    
+    return std::string(reinterpret_cast<const char*>(output_buffer.data()), compressed_size);
 }
 
 }

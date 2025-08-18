@@ -29,11 +29,17 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AM
     set(HAS_VALIDATION_ASM TRUE)
     add_library(crypto_advanced_asm_impl src/crypto/asm/x86_64/crypto_advanced.asm)
     set(HAS_CRYPTO_ADVANCED TRUE)
+    add_library(compression_asm_impl src/utils/asm/x86_64/compression_suite.asm)
+    set(HAS_COMPRESSION_ASM TRUE)
+    add_library(network_asm_impl src/utils/asm/x86_64/network_operations.asm)
+    set(HAS_NETWORK_ASM TRUE)
 else()
     set(HAS_FAST_MEMORY FALSE)
     set(HAS_HTTP_ASM FALSE)
     set(HAS_VALIDATION_ASM FALSE)
     set(HAS_CRYPTO_ADVANCED FALSE)
+    set(HAS_COMPRESSION_ASM FALSE)
+    set(HAS_NETWORK_ASM FALSE)
 endif()
 
 add_library(p256_asm_impl src/crypto/asm/x86_64/p256_avx2.asm)
@@ -46,6 +52,9 @@ add_executable(https_server
     src/utils/logger.cpp
     src/utils/http_accelerated.cpp
     src/utils/validation_engine.cpp
+    src/utils/compression_suite.cpp
+    src/utils/network_operations.cpp
+    src/utils/benchmark_utils.cpp
     src/http/http.cpp
     src/http/static_handler.cpp
     src/crypto/aes_provider.cpp
@@ -80,6 +89,16 @@ endif()
 if(HAS_CRYPTO_ADVANCED)
     target_link_libraries(https_server PRIVATE crypto_advanced_asm_impl)
     target_compile_definitions(https_server PRIVATE HAS_CRYPTO_ADVANCED=1)
+endif()
+
+if(HAS_COMPRESSION_ASM)
+    target_link_libraries(https_server PRIVATE compression_asm_impl)
+    target_compile_definitions(https_server PRIVATE HAS_COMPRESSION_ASM=1)
+endif()
+
+if(HAS_NETWORK_ASM)
+    target_link_libraries(https_server PRIVATE network_asm_impl)
+    target_compile_definitions(https_server PRIVATE HAS_NETWORK_ASM=1)
 endif()
 
 if(WIN32)
@@ -191,6 +210,8 @@ message(STATUS "  Fast Memory Operations: ${HAS_FAST_MEMORY}")
 message(STATUS "  HTTP Assembly Optimizations: ${HAS_HTTP_ASM}")
 message(STATUS "  Validation Assembly Optimizations: ${HAS_VALIDATION_ASM}")
 message(STATUS "  Crypto Advanced Assembly: ${HAS_CRYPTO_ADVANCED}")
+message(STATUS "  Compression Assembly Optimizations: ${HAS_COMPRESSION_ASM}")
+message(STATUS "  Network Assembly Optimizations: ${HAS_NETWORK_ASM}")
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     message(STATUS "  ARM64 NEON optimizations enabled")

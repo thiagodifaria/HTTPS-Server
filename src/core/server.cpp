@@ -8,6 +8,8 @@
 #include "utils/buffer.hpp"
 #include "utils/fast_memory.hpp"
 #include "utils/http_accelerated.hpp"
+#include "utils/compression_suite.hpp"
+#include "utils/network_operations.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -77,6 +79,21 @@ Server::Server(const ServerConfig& config)
         LOG_INFO("HTTP parsing optimizations enabled");
     } else {
         LOG_INFO("Using standard HTTP parsing");
+    }
+    
+    if (compression::CompressionOps::instance().has_avx2()) {
+        LOG_INFO("Compression optimizations enabled (Deflate/LZ4/Brotli)");
+    } else {
+        LOG_INFO("Using standard compression algorithms");
+    }
+    
+    auto& net_ops = network_ops::NetworkOps::instance();
+    if (net_ops.has_avx2() && net_ops.has_rdrand()) {
+        LOG_INFO("Network operations optimized (Base64/UUID/Hex with RDRAND+AVX2)");
+    } else if (net_ops.has_avx2()) {
+        LOG_INFO("Network operations optimized (Base64/Hex with AVX2, UUID fallback)");
+    } else {
+        LOG_INFO("Using standard network operations");
     }
     
 #ifdef HAS_CRYPTO_ADVANCED
@@ -494,23 +511,15 @@ http::HttpRequest parse_request(const Buffer& buffer) {
     }
 
     if (content_length > 0) {
-        const char* headers_end = static_cast<const char*>(
-            fast_memory::memchr(raw_request.data(), '\r', raw_request.size())
-        );
+        const std::string header_delimiter = "\r\n\r\n";
+        const size_t headers_end_pos = raw_request.find(header_delimiter);
         
-        if (headers_end) {
-            const char* body_start = static_cast<const char*>(
-                fast_memory::memchr(headers_end, '\n', raw_request.size() - (headers_end - raw_request.data()))
-            );
-            
-            if (body_start) {
-                body_start++;
-                const size_t body_offset = body_start - raw_request.data();
-                if (body_offset < raw_request.size()) {
-                    const size_t body_available = raw_request.size() - body_offset;
-                    const size_t body_size = (std::min)(content_length, body_available);
-                    request.body = raw_request.substr(body_offset, body_size);
-                }
+        if (headers_end_pos != std::string::npos) {
+            const size_t body_start = headers_end_pos + header_delimiter.length();
+            if (body_start < raw_request.size()) {
+                const size_t body_available = raw_request.size() - body_start;
+                const size_t body_size = (std::min)(content_length, body_available);
+                request.body = raw_request.substr(body_start, body_size);
             }
         }
     }

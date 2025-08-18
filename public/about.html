@@ -25,20 +25,20 @@
             
             <div class="feature">
                 <span class="feature-icon">🔐</span>
-                <h3>Criptografia Assembly</h3>
+                <h3>Assembly Otimizado</h3>
                 <p><strong>AES-NI</strong> implementação hand-optimized<br>
                 <strong>SHA-256 AVX</strong> hash com registradores AVX<br>
-                <strong>Custom Provider</strong> integração OpenSSL nativa<br>
-                <strong>P-256</strong> curva elíptica otimizada</p>
+                <strong>Base64 SIMD</strong> encoding/decoding vetorizado<br>
+                <strong>UUID v4</strong> geração com hardware RNG</p>
             </div>
             
             <div class="feature">
                 <span class="feature-icon">🚀</span>
                 <h3>Performance</h3>
                 <p><strong>3.51 GB/s</strong> throughput AES-NI<br>
-                <strong>Thread Pool</strong> detecção automática de cores<br>
-                <strong>Zero-copy Buffer</strong> reutilização de memória<br>
-                <strong>AVX2</strong> operações de memória otimizadas</p>
+                <strong>HTTP Parsing</strong> acelerado com AVX2<br>
+                <strong>Hex Encoding</strong> vetorizado<br>
+                <strong>Validação SIMD</strong> de entrada JSON</p>
             </div>
         </div>
         
@@ -47,21 +47,21 @@
             <div class="code-block">
 AES-NI Assembly: 3.51 GB/s (20M blocos, 305 MB em 0.08s)
 SHA-256 Assembly: Alta performance com registradores AVX
-HTTP Processing: < 1ms por requisição
-Memory Usage: Otimizado com buffer reutilizável
-Concurrent Connections: Múltiplas conexões simultâneas
-Static File Serving: Alto throughput de entrega
+Base64 SIMD: Encoding/decoding vetorizado
+UUID v4: Geração com hardware RNG (RDRAND)
+HTTP Parsing: < 1ms por requisição com AVX2
+Network Operations: Hex encoding otimizado
             </div>
         </div>
         
         <div class="api-demo">
-            <h3>🏗️ Arquitetura</h3>
+            <h3>🗂️ Arquitetura</h3>
             <div class="code-block">
 src/
 ├── core/           # Infraestrutura (servidor, config, thread pool)
 ├── crypto/         # Engine criptográfico e assembly otimizado  
 ├── http/           # Protocolo HTTP, roteamento e arquivos estáticos
-├── utils/          # Buffer de performance, logging e utilitários
+├── utils/          # Network ops, validation, compression SIMD
 └── main.cpp        # Ponto de entrada e configuração de rotas
             </div>
         </div>
@@ -71,9 +71,9 @@ src/
             <div class="developer-card">
                 <div class="developer-info">
                     <h3>Thiago Di Faria</h3>
-                    <p>Especialista em sistemas de alta performance, criptografia avançada e otimizações em assembly. 
-                    Este projeto demonstra expertise em C++ moderno, integração com OpenSSL, e desenvolvimento de 
-                    providers customizados para máxima performance criptográfica.</p>
+                    <p>Especialista em sistemas de alta performance, criptografia avançada e otimizações SIMD. 
+                    Este projeto demonstra expertise em C++ moderno, integração com OpenSSL, desenvolvimento de 
+                    assembly otimizado e operações de rede vetorizadas para máxima performance.</p>
                     <div class="developer-links">
                         <a href="https://github.com/thiagodifaria" target="_blank" class="dev-link github">
                             <span>📱</span> @thiagodifaria
@@ -93,9 +93,9 @@ src/
             <h2>🛡️ Recursos de Segurança</h2>
             <ul style="color: #666; font-size: 1rem; line-height: 1.8;">
                 <li><strong>TLS 1.3:</strong> Protocolo de criptografia mais recente</li>
-                <li><strong>Custom Provider:</strong> Implementações assembly auditáveis</li>
-                <li><strong>Validação de Entrada:</strong> Validação rigorosa de entrada HTTP</li>
-                <li><strong>Proteção Buffer Overflow:</strong> Gerenciamento seguro de memória</li>
+                <li><strong>Assembly Auditável:</strong> Implementações criptográficas transparentes</li>
+                <li><strong>Validação SIMD:</strong> Validação rápida de entrada JSON</li>
+                <li><strong>UUID Seguro:</strong> Geração com hardware RNG quando disponível</li>
                 <li><strong>Logging Estruturado:</strong> Rastreamento completo de segurança</li>
                 <li><strong>Headers de Segurança:</strong> HSTS, CSP, XSS Protection</li>
             </ul>
@@ -109,7 +109,7 @@ src/
     <footer class="footer">
         <div class="footer-content">
             <p>&copy; 2025 HTTPS Server - Desenvolvido por <strong>Thiago Di Faria</strong></p>
-            <p>Performance extrema com criptografia assembly otimizada</p>
+            <p>Performance extrema com assembly SIMD otimizado</p>
         </div>
     </footer>
 </body>

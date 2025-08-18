@@ -465,3 +465,34 @@ body {
         font-size: 0.9rem;
     }
 }
+
+.routes-horizontal {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+}
+
+.benchmark-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.benchmark-page .container {
+    flex: 1;
+}
+
+.benchmark-page .footer {
+    margin-top: auto;
+}
+
+@media (max-width: 768px) {
+    .routes-horizontal {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .routes-horizontal {
+        grid-template-columns: 1fr;
+    }
+}

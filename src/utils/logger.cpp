@@ -1,4 +1,5 @@
 #include "utils/logger.hpp"
+#include "utils/network_operations.hpp"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
@@ -35,7 +36,34 @@ void Logger::log(LogLevel level, const std::string& message) {
     
     const char* level_str[] = {"Debug", "Info", "Warning", "Error"};
     
-    std::cout << "[" << ss.str() << "] [" << level_str[static_cast<int>(level)] << "] " << message << std::endl;
+    std::string log_id = network_ops::NetworkOps::instance().generate_uuid_string();
+    
+    std::cout << "[" << ss.str() << "] [" << level_str[static_cast<int>(level)] 
+              << "] [" << log_id.substr(0, 8) << "] " << message << std::endl;
+}
+
+void Logger::log_with_binary_data(LogLevel level, const std::string& message, 
+                                  const void* data, size_t size) {
+    if (level < level_) return;
+    
+    std::string hex_data;
+    if (data && size > 0) {
+        hex_data = " [HEX: ";
+        if (size > 64) {
+            std::string partial_data = network_ops::NetworkOps::instance().encode_hex(
+                std::string(static_cast<const char*>(data), 32));
+            hex_data += partial_data + "..." + std::to_string(size) + " bytes total]";
+        } else {
+            hex_data += network_ops::NetworkOps::instance().encode_hex(
+                std::string(static_cast<const char*>(data), size)) + "]";
+        }
+    }
+    
+    log(level, message + hex_data);
+}
+
+std::string Logger::generate_request_id() {
+    return network_ops::NetworkOps::instance().generate_uuid_string();
 }
 
 }

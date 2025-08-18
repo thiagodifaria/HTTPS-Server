@@ -28,18 +28,17 @@ bool ValidationOps::detect_avx2() noexcept {
 ValidationResult ValidationOps::fallback_json_validate(const char* data, size_t len) const noexcept {
     if (!data || len == 0) return ValidationResult::INVALID_JSON;
     
+    if (!fallback_utf8_validate(data, len)) {
+        return ValidationResult::INVALID_UTF8;
+    }
+    
     int brace_count = 0;
     int bracket_count = 0;
     bool in_string = false;
+    bool escaped = false;
     
     for (size_t i = 0; i < len; ++i) {
-        unsigned char c = static_cast<unsigned char>(data[i]);
-        
-        if (c > 127) {
-            if (!fallback_utf8_validate(data + i, len - i)) {
-                return ValidationResult::INVALID_UTF8;
-            }
-        }
+        char c = data[i];
         
         if (!in_string) {
             if (c == '{') brace_count++;
@@ -52,7 +51,11 @@ ValidationResult ValidationOps::fallback_json_validate(const char* data, size_t 
                 return ValidationResult::INVALID_JSON;
             }
         } else {
-            if (c == '"' && (i == 0 || data[i-1] != '\\')) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
                 in_string = false;
             }
         }
@@ -84,24 +87,33 @@ bool ValidationOps::fallback_utf8_validate(const char* data, size_t len) const n
         
         if (c < 0x80) {
             continue;
-        } else if (c < 0xC0) {
-            return false;
-        } else if (c < 0xE0) {
+        }
+        
+        if ((c & 0xE0) == 0xC0) {
             if (i + 1 >= len) return false;
-            if ((static_cast<unsigned char>(data[i + 1]) & 0xC0) != 0x80) return false;
+            unsigned char c2 = static_cast<unsigned char>(data[i + 1]);
+            if ((c2 & 0xC0) != 0x80) return false;
             i++;
-        } else if (c < 0xF0) {
+        }
+        else if ((c & 0xF0) == 0xE0) {
             if (i + 2 >= len) return false;
-            if ((static_cast<unsigned char>(data[i + 1]) & 0xC0) != 0x80) return false;
-            if ((static_cast<unsigned char>(data[i + 2]) & 0xC0) != 0x80) return false;
+            unsigned char c2 = static_cast<unsigned char>(data[i + 1]);
+            unsigned char c3 = static_cast<unsigned char>(data[i + 2]);
+            if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) return false;
             i += 2;
-        } else if (c < 0xF8) {
+        }
+        else if ((c & 0xF8) == 0xF0) {
             if (i + 3 >= len) return false;
-            if ((static_cast<unsigned char>(data[i + 1]) & 0xC0) != 0x80) return false;
-            if ((static_cast<unsigned char>(data[i + 2]) & 0xC0) != 0x80) return false;
-            if ((static_cast<unsigned char>(data[i + 3]) & 0xC0) != 0x80) return false;
+            unsigned char c2 = static_cast<unsigned char>(data[i + 1]);
+            unsigned char c3 = static_cast<unsigned char>(data[i + 2]);
+            unsigned char c4 = static_cast<unsigned char>(data[i + 3]);
+            if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80) return false;
             i += 3;
-        } else {
+        }
+        else if ((c & 0xC0) == 0x80) {
+            continue;
+        }
+        else {
             return false;
         }
     }
