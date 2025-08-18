@@ -1,6 +1,7 @@
 #include "core/server.hpp"
 #include "core/config.hpp"
 #include "utils/logger.hpp"
+#include "utils/validation_engine.hpp"
 #include "http/static_handler.hpp"
 #include "http/http.hpp"
 #include "nlohmann/json.hpp"
@@ -52,19 +53,46 @@ int main() {
                     response.status_code = 400;
                     response.status_text = "Bad Request";
                 } else {
-                    json request_json = json::parse(req.body);
+                    auto validation_result = https_server::validation::ValidationOps::instance()
+                        .json_validate_fast(req.body.c_str(), req.body.size());
                     
-                    json response_json = request_json;
-                    response_json["received"] = true;
-                    response_json["timestamp"] = std::time(nullptr);
-                    response_json["server"] = "HTTPS Server v1.0";
-                    response_json["status"] = "success";
-                    
-                    response.body = response_json.dump(2);
+                    if (validation_result != https_server::validation::ValidationResult::VALID) {
+                        json error_response;
+                        error_response["status"] = "error";
+                        
+                        switch (validation_result) {
+                            case https_server::validation::ValidationResult::INVALID_JSON:
+                                error_response["error"] = "Invalid JSON format";
+                                break;
+                            case https_server::validation::ValidationResult::INVALID_UTF8:
+                                error_response["error"] = "Invalid UTF-8 encoding";
+                                break;
+                            case https_server::validation::ValidationResult::UNSAFE_CHARS:
+                                error_response["error"] = "Unsafe characters detected";
+                                break;
+                            default:
+                                error_response["error"] = "Validation failed";
+                                break;
+                        }
+                        
+                        response.body = error_response.dump(2);
+                        response.status_code = 400;
+                        response.status_text = "Bad Request";
+                    } else {
+                        json request_json = json::parse(req.body);
+                        
+                        json response_json = request_json;
+                        response_json["received"] = true;
+                        response_json["timestamp"] = std::time(nullptr);
+                        response_json["server"] = "HTTPS Server v1.0";
+                        response_json["status"] = "success";
+                        
+                        response.body = response_json.dump(2);
+                    }
                 }
             } catch (const json::exception& e) {
                 json error_response;
-                error_response["error"] = "Invalid JSON";
+                error_response["error"] = "JSON parsing failed";
                 error_response["details"] = e.what();
                 error_response["status"] = "error";
                 response.body = error_response.dump(2);

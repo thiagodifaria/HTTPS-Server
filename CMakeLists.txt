@@ -23,8 +23,17 @@ endif()
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     add_library(fast_memory_impl src/utils/asm/x86_64/memory_avx2.asm)
     set(HAS_FAST_MEMORY TRUE)
+    add_library(http_asm_impl src/utils/asm/x86_64/http_accelerated.asm)
+    set(HAS_HTTP_ASM TRUE)
+    add_library(validation_asm_impl src/utils/asm/x86_64/validation_engine.asm)
+    set(HAS_VALIDATION_ASM TRUE)
+    add_library(crypto_advanced_asm_impl src/crypto/asm/x86_64/crypto_advanced.asm)
+    set(HAS_CRYPTO_ADVANCED TRUE)
 else()
     set(HAS_FAST_MEMORY FALSE)
+    set(HAS_HTTP_ASM FALSE)
+    set(HAS_VALIDATION_ASM FALSE)
+    set(HAS_CRYPTO_ADVANCED FALSE)
 endif()
 
 add_library(p256_asm_impl src/crypto/asm/x86_64/p256_avx2.asm)
@@ -35,6 +44,8 @@ add_executable(https_server
     src/core/config.cpp
     src/core/event_loop.cpp
     src/utils/logger.cpp
+    src/utils/http_accelerated.cpp
+    src/utils/validation_engine.cpp
     src/http/http.cpp
     src/http/static_handler.cpp
     src/crypto/aes_provider.cpp
@@ -54,6 +65,21 @@ target_link_libraries(https_server PRIVATE
 if(HAS_FAST_MEMORY)
     target_link_libraries(https_server PRIVATE fast_memory_impl)
     target_compile_definitions(https_server PRIVATE HAS_FAST_MEMORY=1)
+endif()
+
+if(HAS_HTTP_ASM)
+    target_link_libraries(https_server PRIVATE http_asm_impl)
+    target_compile_definitions(https_server PRIVATE HAS_HTTP_ASM=1)
+endif()
+
+if(HAS_VALIDATION_ASM)
+    target_link_libraries(https_server PRIVATE validation_asm_impl)
+    target_compile_definitions(https_server PRIVATE HAS_VALIDATION_ASM=1)
+endif()
+
+if(HAS_CRYPTO_ADVANCED)
+    target_link_libraries(https_server PRIVATE crypto_advanced_asm_impl)
+    target_compile_definitions(https_server PRIVATE HAS_CRYPTO_ADVANCED=1)
 endif()
 
 if(WIN32)
@@ -162,6 +188,9 @@ message(STATUS "  Build Type: Release")
 message(STATUS "  OpenSSL Version: ${OPENSSL_VERSION}")
 message(STATUS "  SHA-256 Implementation: ${SHA256_IMPL}")
 message(STATUS "  Fast Memory Operations: ${HAS_FAST_MEMORY}")
+message(STATUS "  HTTP Assembly Optimizations: ${HAS_HTTP_ASM}")
+message(STATUS "  Validation Assembly Optimizations: ${HAS_VALIDATION_ASM}")
+message(STATUS "  Crypto Advanced Assembly: ${HAS_CRYPTO_ADVANCED}")
 
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     message(STATUS "  ARM64 NEON optimizations enabled")

@@ -5,6 +5,7 @@
 
 #include "aes.hpp"
 #include "sha256.hpp"
+#include "crypto_advanced.hpp"
 #include <openssl/core_dispatch.h>
 #include <openssl/core_names.h>
 #include <openssl/params.h>
@@ -38,6 +39,26 @@ struct prov_sha256_ctx {
 struct prov_p256_ctx {
     std::vector<std::uint64_t> private_key;
     std::vector<std::uint64_t> public_key;
+    bool has_private;
+    bool has_public;
+};
+
+struct prov_chacha20_ctx {
+    std::vector<std::uint8_t> key;
+    std::vector<std::uint8_t> nonce;
+    std::uint32_t counter;
+};
+
+struct prov_blake3_ctx {
+    std::vector<std::uint8_t> state;
+    std::vector<std::uint8_t> buffer;
+    std::uint64_t total_len;
+    size_t buffer_len;
+};
+
+struct prov_x25519_ctx {
+    std::vector<std::uint8_t> private_key;
+    std::vector<std::uint8_t> public_key;
     bool has_private;
     bool has_public;
 };
@@ -170,6 +191,107 @@ static int sha256_digest_final(void *vctx, unsigned char *out, size_t *outl, siz
     return 1;
 }
 
+static void *chacha20_newctx(void*) {
+    auto *ctx = new prov_chacha20_ctx();
+    ctx->key.resize(32);
+    ctx->nonce.resize(12);
+    ctx->counter = 0;
+    return ctx;
+}
+
+static void chacha20_freectx(void *vctx) {
+    delete static_cast<prov_chacha20_ctx*>(vctx);
+}
+
+static int chacha20_einit(void *vctx, const unsigned char *key, size_t keylen,
+                          const unsigned char *nonce, size_t noncelen, const OSSL_PARAM*) {
+    auto *ctx = static_cast<prov_chacha20_ctx*>(vctx);
+    if (key && keylen == 32) {
+        std::memcpy(ctx->key.data(), key, 32);
+    }
+    if (nonce && noncelen == 12) {
+        std::memcpy(ctx->nonce.data(), nonce, 12);
+    }
+    ctx->counter = 0;
+    return 1;
+}
+
+static int chacha20_cipher(void *vctx, unsigned char *out, size_t *outl,
+                           size_t outsize, const unsigned char *in, size_t inl) {
+    auto *ctx = static_cast<prov_chacha20_ctx*>(vctx);
+    
+    if (inl > outsize) {
+        return 0;
+    }
+    
+    for (size_t i = 0; i < inl; i += 64) {
+        const size_t chunk_size = (std::min)(static_cast<size_t>(64), inl - i);
+        chacha20_encrypt_block_asm(in + i, out + i, ctx->key.data(), ctx->nonce.data(), ctx->counter);
+        ctx->counter++;
+    }
+    
+    *outl = inl;
+    return 1;
+}
+
+static void *blake3_newctx(void*) {
+    auto *ctx = new prov_blake3_ctx();
+    ctx->state.resize(32);
+    ctx->buffer.resize(64);
+    ctx->total_len = 0;
+    ctx->buffer_len = 0;
+    return ctx;
+}
+
+static void blake3_freectx(void *vctx) {
+    delete static_cast<prov_blake3_ctx*>(vctx);
+}
+
+static int blake3_digest_init(void *vctx, const OSSL_PARAM*) {
+    auto *ctx = static_cast<prov_blake3_ctx*>(vctx);
+    std::fill(ctx->state.begin(), ctx->state.end(), 0);
+    ctx->total_len = 0;
+    ctx->buffer_len = 0;
+    return 1;
+}
+
+static int blake3_digest_update(void *vctx, const unsigned char *in, size_t inl) {
+    auto *ctx = static_cast<prov_blake3_ctx*>(vctx);
+    
+    ctx->total_len += inl;
+    
+    while (inl > 0) {
+        const size_t copy_len = (std::min)(inl, 64 - ctx->buffer_len);
+        std::memcpy(ctx->buffer.data() + ctx->buffer_len, in, copy_len);
+        ctx->buffer_len += copy_len;
+        in += copy_len;
+        inl -= copy_len;
+        
+        if (ctx->buffer_len == 64) {
+            blake3_hash_chunk_asm(ctx->buffer.data(), 64, ctx->state.data());
+            ctx->buffer_len = 0;
+        }
+    }
+    
+    return 1;
+}
+
+static int blake3_digest_final(void *vctx, unsigned char *out, size_t *outl, size_t outsize) {
+    auto *ctx = static_cast<prov_blake3_ctx*>(vctx);
+    
+    if (outsize < 32) {
+        return 0;
+    }
+    
+    if (ctx->buffer_len > 0) {
+        blake3_hash_chunk_asm(ctx->buffer.data(), ctx->buffer_len, ctx->state.data());
+    }
+    
+    std::memcpy(out, ctx->state.data(), 32);
+    *outl = 32;
+    return 1;
+}
+
 static void *p256_newctx(void*) {
     auto *ctx = new prov_p256_ctx();
     ctx->private_key.resize(4, 0);
@@ -230,6 +352,55 @@ static int p256_derive(void *vctx, unsigned char *secret, size_t *secretlen,
     return 1;
 }
 
+static void *x25519_newctx(void*) {
+    auto *ctx = new prov_x25519_ctx();
+    ctx->private_key.resize(32);
+    ctx->public_key.resize(32);
+    ctx->has_private = false;
+    ctx->has_public = false;
+    return ctx;
+}
+
+static void x25519_freectx(void *vctx) {
+    delete static_cast<prov_x25519_ctx*>(vctx);
+}
+
+static int x25519_keygen(void *vctx, unsigned char *pub, size_t *publen,
+                         unsigned char *priv, size_t *privlen) {
+    auto *ctx = static_cast<prov_x25519_ctx*>(vctx);
+    
+    if (priv && *privlen >= 32) {
+        for (size_t i = 0; i < 32; ++i) {
+            ctx->private_key[i] = static_cast<std::uint8_t>(rand());
+        }
+        std::memcpy(priv, ctx->private_key.data(), 32);
+        *privlen = 32;
+        ctx->has_private = true;
+    }
+    
+    if (pub && *publen >= 32) {
+        x25519_scalar_mult_asm(ctx->private_key.data(), nullptr, ctx->public_key.data());
+        std::memcpy(pub, ctx->public_key.data(), 32);
+        *publen = 32;
+        ctx->has_public = true;
+    }
+    
+    return 1;
+}
+
+static int x25519_derive(void *vctx, unsigned char *secret, size_t *secretlen,
+                         const unsigned char *peer_pub, size_t peer_publen) {
+    auto *ctx = static_cast<prov_x25519_ctx*>(vctx);
+    
+    if (!ctx->has_private || peer_publen != 32 || *secretlen < 32) {
+        return 0;
+    }
+    
+    x25519_scalar_mult_asm(ctx->private_key.data(), peer_pub, secret);
+    *secretlen = 32;
+    return 1;
+}
+
 static const OSSL_DISPATCH aes128_ecb_functions[] = {
     { OSSL_FUNC_CIPHER_NEWCTX, reinterpret_cast<void (*)(void)>(aes_newctx) },
     { OSSL_FUNC_CIPHER_FREECTX, reinterpret_cast<void (*)(void)>(aes_freectx) },
@@ -247,6 +418,23 @@ static const OSSL_DISPATCH sha256_functions[] = {
     { 0, nullptr }
 };
 
+static const OSSL_DISPATCH chacha20_functions[] = {
+    { OSSL_FUNC_CIPHER_NEWCTX, reinterpret_cast<void (*)(void)>(chacha20_newctx) },
+    { OSSL_FUNC_CIPHER_FREECTX, reinterpret_cast<void (*)(void)>(chacha20_freectx) },
+    { OSSL_FUNC_CIPHER_ENCRYPT_INIT, reinterpret_cast<void (*)(void)>(chacha20_einit) },
+    { OSSL_FUNC_CIPHER_CIPHER, reinterpret_cast<void (*)(void)>(chacha20_cipher) },
+    { 0, nullptr }
+};
+
+static const OSSL_DISPATCH blake3_functions[] = {
+    { OSSL_FUNC_DIGEST_NEWCTX, reinterpret_cast<void (*)(void)>(blake3_newctx) },
+    { OSSL_FUNC_DIGEST_FREECTX, reinterpret_cast<void (*)(void)>(blake3_freectx) },
+    { OSSL_FUNC_DIGEST_INIT, reinterpret_cast<void (*)(void)>(blake3_digest_init) },
+    { OSSL_FUNC_DIGEST_UPDATE, reinterpret_cast<void (*)(void)>(blake3_digest_update) },
+    { OSSL_FUNC_DIGEST_FINAL, reinterpret_cast<void (*)(void)>(blake3_digest_final) },
+    { 0, nullptr }
+};
+
 static const OSSL_DISPATCH p256_keyexch_functions[] = {
     { OSSL_FUNC_KEYEXCH_NEWCTX, reinterpret_cast<void (*)(void)>(p256_newctx) },
     { OSSL_FUNC_KEYEXCH_FREECTX, reinterpret_cast<void (*)(void)>(p256_freectx) },
@@ -261,11 +449,29 @@ static const OSSL_DISPATCH p256_keymgmt_functions[] = {
     { 0, nullptr }
 };
 
+static const OSSL_DISPATCH x25519_keyexch_functions[] = {
+    { OSSL_FUNC_KEYEXCH_NEWCTX, reinterpret_cast<void (*)(void)>(x25519_newctx) },
+    { OSSL_FUNC_KEYEXCH_FREECTX, reinterpret_cast<void (*)(void)>(x25519_freectx) },
+    { OSSL_FUNC_KEYEXCH_DERIVE, reinterpret_cast<void (*)(void)>(x25519_derive) },
+    { 0, nullptr }
+};
+
+static const OSSL_DISPATCH x25519_keymgmt_functions[] = {
+    { OSSL_FUNC_KEYMGMT_NEW, reinterpret_cast<void (*)(void)>(x25519_newctx) },
+    { OSSL_FUNC_KEYMGMT_FREE, reinterpret_cast<void (*)(void)>(x25519_freectx) },
+    { OSSL_FUNC_KEYMGMT_GEN, reinterpret_cast<void (*)(void)>(x25519_keygen) },
+    { 0, nullptr }
+};
+
 static const OSSL_ALGORITHM algorithms[] = {
     { "AES-128-ECB", "provider=aes-ni", aes128_ecb_functions },
     { "SHA256", "provider=sha256-avx", sha256_functions },
+    { "ChaCha20", "provider=chacha20-avx2", chacha20_functions },
+    { "BLAKE3", "provider=blake3-avx2", blake3_functions },
     { "ECDH", "provider=p256-avx2", p256_keyexch_functions },
     { "EC", "provider=p256-avx2", p256_keymgmt_functions },
+    { "X25519", "provider=x25519-avx2", x25519_keyexch_functions },
+    { "X25519", "provider=x25519-avx2", x25519_keymgmt_functions },
     { nullptr, nullptr, nullptr }
 };
 
@@ -278,9 +484,9 @@ static const OSSL_ALGORITHM *provider_query(void*, int operation_id, int *no_cac
         case OSSL_OP_DIGEST:
             return &algorithms[1];
         case OSSL_OP_KEYEXCH:
-            return &algorithms[2];
+            return &algorithms[4];
         case OSSL_OP_KEYMGMT:
-            return &algorithms[3];
+            return &algorithms[5];
         default:
             return nullptr;
     }

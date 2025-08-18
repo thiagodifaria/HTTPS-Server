@@ -7,6 +7,7 @@
 #include "utils/logger.hpp"
 #include "utils/buffer.hpp"
 #include "utils/fast_memory.hpp"
+#include "utils/http_accelerated.hpp"
 #include "http/http.hpp"
 #include <iostream>
 #include <stdexcept>
@@ -72,6 +73,18 @@ Server::Server(const ServerConfig& config)
         LOG_INFO("Using standard memory operations (AVX2 not available)");
     }
     
+    if (http_accelerated::HttpOps::instance().has_avx2()) {
+        LOG_INFO("HTTP parsing optimizations enabled");
+    } else {
+        LOG_INFO("Using standard HTTP parsing");
+    }
+    
+#ifdef HAS_CRYPTO_ADVANCED
+    LOG_INFO("Advanced crypto algorithms available (ChaCha20, Blake3, X25519)");
+#else
+    LOG_INFO("Using standard crypto algorithms");
+#endif
+    
     init_openssl();
     setup_providers();
     load_openssl_config();
@@ -126,7 +139,7 @@ void Server::setup_providers() {
     if (OSSL_PROVIDER_add_builtin(NULL, "aes_provider", OSSL_provider_init) == 1) {
         custom_provider_ = OSSL_PROVIDER_load(NULL, "aes_provider");
         if (custom_provider_) {
-            LOG_INFO("Custom AES/SHA-256 provider loaded");
+            LOG_INFO("Custom crypto provider loaded (AES/SHA-256/ChaCha20/Blake3/X25519)");
         }
     }
     
@@ -137,7 +150,7 @@ void Server::setup_providers() {
         custom_provider_ = OSSL_PROVIDER_load(NULL, "./libaes_provider.so");
 #endif
         if (custom_provider_) {
-            LOG_INFO("External AES/SHA-256 provider loaded");
+            LOG_INFO("External crypto provider loaded");
         }
     }
 }
@@ -371,7 +384,11 @@ void Server::handle_connection(SOCKET client_socket) {
             
             buffer.has_written(static_cast<size_t>(bytes_read));
             
-            if (buffer.find_crlf_crlf() != SIZE_MAX) break;
+            size_t header_end_pos;
+            if (http_accelerated::HttpOps::instance().find_header_end(
+                buffer.readable_view().data(), buffer.readable_view().size(), &header_end_pos)) {
+                break;
+            }
             
             buffer.ensure_capacity(4096);
         }
@@ -432,16 +449,30 @@ void close_socket(const SOCKET s) { close(s); }
 http::HttpRequest parse_request(const Buffer& buffer) {
     http::HttpRequest request;
     const auto view = buffer.readable_view();
+    
+    auto parse_result = http_accelerated::HttpOps::instance().parse_method_uri(
+        view.data(), view.size());
+    
+    if (parse_result.valid) {
+        request.method = std::string(view.data(), parse_result.method_len);
+        request.uri = std::string(view.data() + parse_result.uri_start, parse_result.uri_len);
+        request.http_version = "HTTP/1.1";
+    }
+    
     std::string raw_request(view);
     std::istringstream request_stream(raw_request);
     std::string line;
 
-    if (std::getline(request_stream, line)) {
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
+    if (parse_result.valid) {
+        std::getline(request_stream, line);
+    } else {
+        if (std::getline(request_stream, line)) {
+            if (!line.empty() && line.back() == '\r') {
+                line.pop_back();
+            }
+            std::istringstream request_line_stream(line);
+            request_line_stream >> request.method >> request.uri >> request.http_version;
         }
-        std::istringstream request_line_stream(line);
-        request_line_stream >> request.method >> request.uri >> request.http_version;
     }
 
     size_t content_length = 0;

@@ -6,7 +6,19 @@ else()
     set(SHA256_IMPL sha256_asm_impl)
 endif()
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+    set(HAS_CRYPTO_ADVANCED TRUE)
+else()
+    set(HAS_CRYPTO_ADVANCED FALSE)
+endif()
+
 target_link_libraries(aes_provider PRIVATE aes_asm_impl ${SHA256_IMPL} p256_asm_impl)
+
+if(HAS_CRYPTO_ADVANCED)
+    target_link_libraries(aes_provider PRIVATE crypto_advanced_asm_impl)
+    target_compile_definitions(aes_provider PRIVATE HAS_CRYPTO_ADVANCED=1)
+endif()
+
 target_link_libraries(aes_provider PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(aes_provider PRIVATE .. ${OPENSSL_INCLUDE_DIR})
 
@@ -25,3 +37,5 @@ if(MSVC)
 else()
     target_compile_options(aes_provider PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
+
+message(STATUS "  Crypto Advanced Assembly: ${HAS_CRYPTO_ADVANCED}")
