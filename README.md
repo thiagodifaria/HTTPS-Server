@@ -2,7 +2,7 @@
 
 ![HTTPS Server Logo](https://img.shields.io/badge/HTTPS%20Server-High%20Performance-blue?style=for-the-badge&logo=cplusplus)
 
-**High-Performance HTTPS Server with Assembly-Optimized Cryptography**
+**High-Performance HTTPS Server with SIMD-Optimized Network Operations**
 
 [![C++](https://img.shields.io/badge/C++-17-00599c?style=flat&logo=cplusplus&logoColor=white)](https://isocpp.org)
 [![OpenSSL](https://img.shields.io/badge/OpenSSL-3.0-721412?style=flat&logo=openssl&logoColor=white)](https://openssl.org)
@@ -13,7 +13,7 @@
 
 ---
 
-## 🌍 **Documentation / Documentação**
+## 🌐 **Documentation / Documentação**
 
 **📖 [🇺🇸 Read in English](README_EN.md)**  
 **📖 [🇧🇷 Leia em Português](README_PT.md)**
@@ -22,26 +22,26 @@
 
 ## 🎯 What is HTTPS Server?
 
-A **production-ready HTTPS server** built in C++17 featuring custom **assembly-optimized cryptographic implementations** and a high-performance **OpenSSL provider**. Designed for maximum throughput, security, and efficiency in modern web applications.
+A **production-ready HTTPS server** built in C++17 featuring comprehensive **SIMD-optimized network operations** and **advanced assembly cryptographic implementations**. Designed for maximum throughput, security, and efficiency in modern web applications.
 
 ### ⚡ Key Highlights
 
-- 🔒 **Custom Crypto Provider** - Assembly-optimized AES-NI and SHA-256 implementations
-- 🚀 **Extreme Performance** - 3.51 GB/s AES throughput, multi-threaded architecture
-- 📊 **Modern APIs** - RESTful JSON endpoints with robust HTTP router
-- 🛡️ **Production Ready** - TLS 1.3, secure buffer management, structured logging
-- 🌐 **Cross Platform** - Windows and Linux support with CMake build system
-- ⚙️ **Optimized Core** - Custom buffer class, thread pool, static file serving
+- 🔒 **Advanced Cryptography** - AES-NI, SHA-256 AVX2, ChaCha20, Blake3, X25519
+- 🚀 **SIMD Network Operations** - Base64 vectorized, UUID v4 with hardware RNG, hex encoding
+- 📊 **HTTP Performance** - AVX2 parsing acceleration, validation engine, compression suite  
+- 🛡️ **Production Ready** - TLS 1.3, input validation SIMD, structured logging
+- 🌐 **Cross Platform** - Windows and Linux support with automatic CPU detection
+- ⚙️ **Optimized Core** - Deflate/LZ4/Brotli compression, zero-copy buffer management
 
 ### 🏆 What Makes It Special?
 
 ```
-✅ Assembly-optimized cryptography for maximum performance
-✅ Custom OpenSSL provider integration 
-✅ Zero-copy buffer management with intelligent compaction
-✅ Complete HTTP/1.1 implementation with routing
-✅ Multi-threaded design with hardware concurrency detection
-✅ JSON API support with nlohmann/json integration
+✅ HTTP parsing accelerated with AVX2 (\r\n\r\n detection)
+✅ JSON validation engine with SIMD character classification
+✅ Advanced crypto: ChaCha20-Poly1305, Blake3, X25519
+✅ Compression suite: Deflate, LZ4, Brotli optimized
+✅ Network operations: Base64 SIMD, UUID v4 RDRAND, hex vectorized
+✅ Complete performance benchmark suite accessible via web interface
 ```
 
 ---
@@ -75,33 +75,63 @@ make -j$(nproc)
 
 ### 🔥 Test It Now!
 ```bash
-# Test JSON API
+# Test JSON API with SIMD validation
 curl -k -X POST "https://localhost:8443/api/echo" \
      -H "Content-Type: application/json" \
-     -d '{"message": "Hello World!", "test": true}'
+     -d '{"message": "Hello World!", "encode_data": "test"}'
 
-# Response:
+# Response includes Base64/Hex encoding:
 # {
 #   "message": "Hello World!",
-#   "test": true,
+#   "encode_data": "test",
+#   "base64_encoded": "dGVzdA==",
+#   "hex_encoded": "74657374",
 #   "received": true,
-#   "timestamp": 1234567890,
 #   "server": "HTTPS Server v1.0"
 # }
+
+# Performance benchmarks
+curl -k https://localhost:8443/api/benchmark
 ```
 
 ---
 
-## 🔍 Performance Benchmarks
+## 🔥 Performance Benchmarks
 
 | Component | Throughput | Details |
 |-----------|------------|---------|
-| 🔐 **AES Encryption** | **3.51 GB/s** | 20M blocks, Assembly-optimized AES-NI |
-| 🔑 **SHA-256 Hashing** | **High Performance** | Custom assembly implementation |
-| 🌐 **HTTP Processing** | **Sub-millisecond** | Zero-copy buffer management |
-| 🧵 **Threading** | **Hardware Optimized** | Automatic core detection |
+| 🔐 **AES-NI Assembly** | **3.51 GB/s** | 20M blocks, hand-optimized implementation |
+| 🔒 **SHA-256 AVX** | **High Performance** | Vectorized hash computation |
+| 🌐 **HTTP Parsing** | **Sub-millisecond** | AVX2 accelerated \r\n\r\n detection |
+| 📊 **Base64 SIMD** | **Vectorized** | VPSHUFB lookup table encoding |
+| 🎲 **UUID Generation** | **Hardware RNG** | RDRAND instruction when available |
+| 🗜️ **Compression** | **Multi-algorithm** | Deflate, LZ4, Brotli optimized |
 
-*Benchmarks performed on Intel x64 architecture*
+*Access real-time benchmarks at https://localhost:8443/bench*
+
+---
+
+## 🛠️ SIMD Modules
+
+### 📡 Network Operations
+- **Base64 SIMD**: Vectorized encoding/decoding with lookup tables
+- **UUID v4**: Hardware RNG (RDRAND) with assembly fallback
+- **Hex Encoding**: Optimized binary to hex string conversion
+
+### 🔍 Validation Engine  
+- **JSON SIMD**: Fast validation without complete parsing
+- **UTF-8 Vectorized**: Character encoding validation
+- **Input Sanitization**: SIMD character class detection
+
+### 🗜️ Compression Suite
+- **Deflate**: Optimized for files < 64KB
+- **LZ4**: Ultra-fast compression
+- **Brotli**: Web content optimization (HTML/CSS/JS)
+
+### ⚡ HTTP Acceleration
+- **AVX2 Parsing**: 32-byte simultaneous processing
+- **Header Detection**: Vectorized \r\n\r\n search
+- **Method/URI Extraction**: Accelerated request parsing
 
 ---
 

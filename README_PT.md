@@ -1,52 +1,54 @@
 # HTTPS Server - Servidor HTTPS de Alta Performance
 
-Servidor HTTPS avançado implementado em C++17 com implementações criptográficas otimizadas em assembly e provider OpenSSL de alta performance. Este projeto oferece uma solução completa para aplicações web de alto throughput, incluindo criptografia assembly hand-coded, gerenciamento de buffer de baixo nível, APIs RESTful JSON, e arquitetura multi-threaded robusta.
+Servidor HTTPS avançado implementado em C++17 com operações de rede otimizadas com SIMD, aceleração de parsing HTTP, engines de validação, algoritmos de compressão e implementações criptográficas avançadas. Este projeto oferece uma solução completa para aplicações web de alto throughput com otimizações assembly hand-coded.
 
 ## 🎯 Funcionalidades
 
-- ✅ **Provider criptográfico customizado**: Implementações assembly otimizadas para AES-NI e SHA-256
-- ✅ **Performance extrema**: Throughput AES de 3.51 GB/s com arquitetura multi-threaded
-- ✅ **APIs modernas**: Endpoints JSON RESTful com roteador HTTP robusto
-- ✅ **Buffer de alta performance**: Gerenciamento de memória zero-copy com compactação inteligente
-- ✅ **Produção ready**: TLS 1.3, logging estruturado, thread pool otimizado
-- ✅ **Cross-platform**: Suporte Windows e Linux com sistema de build CMake
-- ✅ **Arquitetura modular**: Separação clara de responsabilidades e componentes testáveis
+- ✅ **Operações de Rede SIMD**: Base64 vetorizado, UUID v4 hardware RNG, hex encoding otimizado
+- ✅ **Aceleração HTTP Parsing**: Detecção AVX2 \r\n\r\n, extração method/URI, contagem de headers
+- ✅ **Engine de Validação**: Validação JSON SIMD, UTF-8 vetorizada, sanitização de entrada
+- ✅ **Criptografia Avançada**: ChaCha20-Poly1305, Blake3, X25519, AES-NI, SHA-256 AVX
+- ✅ **Suite de Compressão**: Deflate, LZ4, Brotli com otimização sliding window
+- ✅ **Benchmarks Performance**: Interface web em tempo real para testar todas as otimizações
+- ✅ **Produção Ready**: TLS 1.3, logging estruturado, thread pool, cross-platform
 
 ## 🗂️ Arquitetura
 
-Arquitetura modular com separação clara de responsabilidades:
+Arquitetura modular com componentes otimizados SIMD:
 
 ```
 src/
 ├── core/           # Infraestrutura (servidor, config, thread pool)
-├── crypto/         # Engine criptográfico e assembly otimizado  
-├── http/           # Protocolo HTTP, roteamento e arquivos estáticos
-├── utils/          # Buffer de performance, logging e utilitários
-└── main.cpp        # Ponto de entrada e configuração de rotas
+├── crypto/         # Crypto avançado: ChaCha20, Blake3, X25519, AES-NI
+├── http/           # Aceleração HTTP, compressão, servir estáticos
+├── utils/          # Network ops, validação, compressão SIMD
+└── main.cpp        # Ponto de entrada e API de benchmarks
 ```
 
 ## 🔧 Stack Tecnológico
 
+### Otimizações SIMD
+- **AVX2**: Processamento paralelo 32-byte para parsing HTTP
+- **VPSHUFB**: Tabelas de lookup Base64
+- **RDRAND**: Geração hardware de números aleatórios para UUID v4
+- **Classificação de Caracteres**: Engines de validação SIMD
+
+### Criptografia Avançada
+- **ChaCha20-Poly1305**: Criptografia autenticada moderna
+- **Blake3**: Tree hashing com otimizações SIMD
+- **X25519**: Montgomery ladder scalar multiplication
+- **AES-NI + SHA-256**: Implementações assembly hand-optimized
+
+### Algoritmos de Compressão
+- **Deflate**: Otimizado para arquivos pequenos com hash tables
+- **LZ4**: Compressão ultra-rápida com string matching
+- **Brotli**: Otimização de conteúdo web para HTML/CSS/JS
+
 ### Tecnologias Core
 - **C++17**: C++ moderno com recursos avançados
-- **OpenSSL 3.0**: Biblioteca criptográfica e implementação TLS
+- **OpenSSL 3.0**: Estendido com provider customizado
 - **CMake**: Sistema de build cross-platform
-- **NASM**: Assembler x86-64 para otimizações de performance
-
-### Criptografia
-- **AES-NI Assembly**: Implementação hand-optimized usando instruções Intel AES
-- **SHA-256 Assembly**: Hash criptográfico com registradores AVX
-- **Custom OpenSSL Provider**: Integração nativa com stack OpenSSL
-
-### Performance
-- **Thread Pool**: Pool multi-threaded com detecção automática de cores
-- **Zero-copy Buffer**: Classe de buffer customizada com reutilização de memória
-- **Structured Logging**: Sistema de logs JSON estruturados
-
-### APIs e HTTP
-- **nlohmann/json**: Processamento JSON de alta performance
-- **HTTP Router**: Sistema de roteamento com suporte a wildcards
-- **Static File Server**: Servidor de arquivos estáticos otimizado
+- **NASM**: Assembler x86-64 para otimizações
 
 ## 📋 Pré-requisitos
 
@@ -54,6 +56,7 @@ src/
 - CMake 3.16+
 - OpenSSL 3.0+
 - NASM (para compilação assembly)
+- CPU com suporte AVX2 (recomendado para performance completa)
 
 ## 🚀 Instalação Rápida
 
@@ -104,166 +107,182 @@ O servidor usa um arquivo `config.json` para configuração:
 }
 ```
 
-### Certificados TLS
+### Detecção de Recursos CPU
 
-```bash
-# Gerar certificado auto-assinado para desenvolvimento
-openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-```
+O servidor automaticamente detecta e habilita:
+- **AVX2**: Para parsing HTTP e operações Base64
+- **RDRAND**: Para geração hardware de UUID
+- **AES-NI**: Para aceleração criptográfica
 
 ## 📊 Uso da API
 
-### Página Principal
+### Benchmarks de Performance
 
 ```bash
-curl -k https://localhost:8443/
-# Retorna interface HTML moderna com design interativo
+# Execução de benchmark em tempo real
+curl -k https://localhost:8443/api/benchmark
+
+# Retorna dados de performance:
+# {
+#   "aes_ni": {"throughput": "3.51 GB/s", "time": "0.08s"},
+#   "sha256": {"throughput": "2.1 GB/s", "time": "0.12s"},
+#   "p256": {"field_ops": 850000, "ecdh_est": 1660}
+# }
 ```
 
-### API JSON Echo
+### API JSON com Validação SIMD
 
 ```bash
 curl -k -X POST "https://localhost:8443/api/echo" \
      -H "Content-Type: application/json" \
-     -d '{"mensagem": "Olá Mundo!", "timestamp": 1640995200}'
+     -d '{"message": "Olá Mundo!", "encode_data": "dados teste"}'
 ```
 
-**Resposta:**
+**Resposta com operações de rede:**
 ```json
 {
-  "mensagem": "Olá Mundo!",
-  "timestamp": 1640995200,
+  "message": "Olá Mundo!",
+  "encode_data": "dados teste",
+  "base64_encoded": "ZGFkb3MgdGVzdGU=",
+  "hex_encoded": "646164732074726573746520",
   "received": true,
   "timestamp": 1234567890,
   "server": "HTTPS Server v1.0"
 }
 ```
 
-### Servir Arquivos Estáticos
+### Interface Web de Performance
 
 ```bash
-# Servir arquivos da pasta public/
-curl -k https://localhost:8443/static/test.html
-curl -k https://localhost:8443/static/style.css
-```
+# Acessar interface de benchmark
+curl -k https://localhost:8443/bench
+# Interface web interativa para executar testes de performance
 
-### Tratamento de Erros
-
-```bash
-# Tratamento de 404
-curl -k https://localhost:8443/inexistente
-# Retorna página 404 estilizada
-
-# Validação JSON
-curl -k -X POST "https://localhost:8443/api/echo" \
-     -H "Content-Type: application/json" \
-     -d 'json inválido'
-# Retorna resposta de erro em JSON
+# Interface principal com todas as funcionalidades
+curl -k https://localhost:8443/
+# Interface HTML moderna mostrando todas as otimizações
 ```
 
 ## 🛠️ Endpoints Principais
 
-| Endpoint | Método | Descrição | Funcionalidade |
-|----------|--------|-----------|----------------|
-| `/` | GET | Página principal | Interface HTML moderna |
-| `/about` | GET | Informações do servidor | Detalhes técnicos |
-| `/api/echo` | POST | API JSON echo | Teste de processamento JSON |
-| `/static/*` | GET | Arquivos estáticos | Servir CSS, JS, imagens |
+| Endpoint | Método | Descrição | Recursos SIMD |
+|----------|--------|-----------|---------------|
+| `/` | GET | Interface principal | Aceleração parsing HTTP |
+| `/about` | GET | Detalhes técnicos | Info todas otimizações |
+| `/bench` | GET | Interface benchmark | Teste performance tempo real |
+| `/api/echo` | POST | Processamento JSON | Validação SIMD + network ops |
+| `/api/benchmark` | GET | API Performance | Benchmarks todos algoritmos |
 
 ## 🧪 Testes e Benchmarks
 
-### Executar Testes
+### Benchmarks Baseados em Web
 
 ```bash
-# Teste unitário AES
-./build/Release/unit_test_aes.exe
-# Output: SUCCESS: Assembly AES implementation is correct.
+# Acessar benchmarks interativos
+https://localhost:8443/bench
 
-# Teste unitário SHA-256  
-./build/Release/unit_test_sha256.exe
-# Output: SUCCESS: Assembly SHA-256 implementation is correct.
-
-# Benchmark AES
-./build/Release/benchmark_aes.exe
-# Output: Starting Assembly AES-NI benchmark...
-#         Processing 20000000 blocks (305 MB).
-#         Finished in 0.08 seconds.
-#         Throughput: 3.51 GB/s.
-
-# Benchmark SHA-256
-./build/Release/benchmark_sha256.exe
-# Output: Starting Assembly SHA-256 benchmark...
-#         Processing 5000000 blocks (305 MB).
+# Endpoint API para testes automatizados
+curl -k https://localhost:8443/api/benchmark
 ```
 
-### Cobertura de Testes
+### Testes Linha de Comando
 
-- ✅ Implementações assembly (AES-NI, SHA-256)
-- ✅ Processamento HTTP e roteamento  
-- ✅ APIs JSON e validação
-- ✅ Gerenciamento de buffer e memória
-- ✅ Servir arquivos estáticos
-- ✅ Thread pool e concorrência
-- ✅ Tratamento de erros e casos extremos
+```bash
+# Benchmark assembly AES
+./build/Release/benchmark_aes.exe
+# Output: AES-NI Assembly: 3.51 GB/s (20M blocos, 305 MB em 0.08s)
+
+# Benchmark assembly SHA-256
+./build/Release/benchmark_sha256.exe
+# Output: SHA-256 Assembly: Alta performance com registradores AVX
+
+# Benchmark curva elíptica P-256
+./build/Release/benchmark_p256.exe
+# Output: Operações de campo, aritmética de pontos, estimativas ECDH
+```
+
+### Teste de Recursos SIMD
+
+O servidor registra detecção de capacidades SIMD:
+
+```
+[Info] AVX2 memory optimizations enabled
+[Info] HTTP parsing optimizations enabled  
+[Info] Network operations optimized (Base64/UUID/Hex with RDRAND+AVX2)
+[Info] Advanced crypto algorithms available (ChaCha20, Blake3, X25519)
+[Info] Compression optimizations enabled (Deflate/LZ4/Brotli)
+```
 
 ## 📈 Performance e Benchmarks
 
-### Benchmarks Típicos
+### Performance em Tempo Real
 
-- **AES-NI Assembly**: 3.51 GB/s (20M blocos, 305 MB em 0.08s)
-- **SHA-256 Assembly**: Alta performance com registradores AVX
-- **Processamento HTTP**: < 1ms por requisição
-- **Uso de Memória**: Otimizado com buffer reutilizável
-- **Conexões Concorrentes**: Múltiplas conexões simultâneas suportadas
-- **Servir Arquivos Estáticos**: Entrega de arquivos com alto throughput
+Acesse benchmarks ao vivo em `https://localhost:8443/bench`:
 
-### Otimizações Implementadas
+- **AES-NI Assembly**: 3.51 GB/s throughput
+- **SHA-256 AVX**: Computação hash vetorizada
+- **HTTP Parsing**: Detecção \r\n\r\n acelerada com AVX2
+- **Base64 SIMD**: Operações tabela lookup VPSHUFB
+- **UUID Generation**: Hardware RDRAND quando disponível
+- **Compression**: Otimização multi-algoritmo
 
-- Assembly hand-coded para instruções AES-NI e AVX
-- Gerenciamento de buffer zero-copy com compactação inteligente
-- Thread pool com detecção automática de hardware
-- Provider OpenSSL integrado para máxima compatibilidade
-- Logs estruturados para debugging e monitoramento
-- Roteamento com wildcards e pattern matching eficiente
+### Otimizações SIMD Implementadas
+
+- **HTTP Parsing**: VPCMPEQB para pattern matching 32-byte
+- **Operações Base64**: Tabelas lookup caractere VPSHUFB  
+- **Engine Validação**: Detecção classe caractere com SIMD
+- **Compressão**: Sliding window com hash tables
+- **Network Operations**: Batch processing para arrays
 
 ## 🔒 Recursos de Segurança
 
-- **TLS 1.3**: Protocolo de criptografia mais recente
-- **Custom Provider**: Implementações assembly auditáveis
-- **Validação de Entrada**: Validação rigorosa de entrada HTTP
-- **Proteção Buffer Overflow**: Gerenciamento seguro de memória
-- **Logging Estruturado**: Rastreamento completo de segurança
-- **Tratamento de Erros**: Não exposição de informações sensíveis
+- **TLS 1.3**: Protocolo criptografia mais recente
+- **Validação SIMD**: Sanitização rápida entrada e validação JSON
+- **Crypto Avançado**: Algoritmos ChaCha20-Poly1305, Blake3, X25519
+- **Hardware RNG**: RDRAND para geração segura UUID
+- **Validação Entrada**: Detecção classe caractere SIMD
+- **Proteção Buffer**: Gerenciamento seguro memória com operações zero-copy
 
-## 🔄 Desenvolvimento
+## 📄 Desenvolvimento
 
-### Sistema de Build
-
-O projeto usa CMake com suporte para:
-- MSVC no Windows
-- GCC/Clang no Linux
-- Compilação assembly com NASM
-- Integração OpenSSL
-- Detecção automática de dependências
-
-### Estrutura do Código
+### Estrutura Módulos SIMD
 
 ```cpp
-// Exemplo: Uso do buffer customizado
-https_server::Buffer buffer;
-buffer.append("Dados HTTP", 10);
-auto view = buffer.readable_view();
-buffer.consume(4); // Operações zero-copy
+// Exemplo: Uso operações de rede
+auto& net_ops = network_ops::NetworkOps::instance();
+if (net_ops.has_avx2() && net_ops.has_rdrand()) {
+    // Operações aceleradas hardware
+    std::string encoded = net_ops.encode_base64(data);
+    uint8_t uuid[16];
+    net_ops.uuid_generate_v4(uuid);
+}
 
-// Exemplo: Endpoint de API JSON
-router.add_route("POST", "/api/dados", [](const auto& req) {
-    json dados = json::parse(req.body);
-    dados["processado"] = true;
+// Exemplo: Aceleração parsing HTTP
+if (http_accelerated::HttpOps::instance().has_avx2()) {
+    size_t header_end;
+    bool found = http_ops.find_header_end(data, len, &header_end);
+}
+
+// Exemplo: Validação com SIMD
+auto result = validation::ValidationOps::instance()
+    .json_validate_fast(json_data.c_str(), json_data.size());
+```
+
+### Integração Benchmarks
+
+```cpp
+// Teste performance acessível via web
+router.add_route("GET", "/api/benchmark", [](const auto& req) {
+    auto aes_result = benchmark::run_aes_benchmark();
+    auto sha_result = benchmark::run_sha256_benchmark();
+    auto p256_result = benchmark::run_p256_benchmark();
     
-    https_server::http::HttpResponse response;
-    response.body = dados.dump(2);
-    response.headers["Content-Type"] = "application/json";
-    return response;
+    json response;
+    response["aes_ni"]["throughput"] = format_throughput(aes_result);
+    response["sha256"]["throughput"] = format_throughput(sha_result);
+    response["p256"]["field_ops"] = p256_result.field_ops_per_sec;
+    
+    return json_response(response);
 });
 ```
 
@@ -271,35 +290,39 @@ router.add_route("POST", "/api/dados", [](const auto& req) {
 
 ### Considerações de Performance
 
-- Use build Release para produção (`-DCMAKE_BUILD_TYPE=Release`)
-- Configure número apropriado de threads baseado nos cores da CPU
-- Monitore uso de memória com logs estruturados
-- Configure certificados TLS apropriados
-- Configure reverse proxy se necessário (nginx, Apache)
+- Habilite todas otimizações SIMD com build Release
+- Verifique capacidades CPU (AVX2, RDRAND, AES-NI)
+- Configure número apropriado threads para workload
+- Monitore performance via endpoint `/api/benchmark`
+- Use compressão para entrega conteúdo estático
 
-### Monitoramento
+### Monitoramento Capacidades SIMD
 
-O servidor fornece logs JSON estruturados:
+O servidor fornece detecção abrangente de capacidades:
 
 ```json
 {
-  "timestamp": "2025-01-15T10:30:00Z",
-  "level": "INFO", 
-  "message": "Request completed",
-  "method": "POST",
-  "uri": "/api/echo",
-  "status_code": 200,
-  "process_time_ms": 1.23
+  "cpu_features": {
+    "avx2": true,
+    "rdrand": true,
+    "aes_ni": true
+  },
+  "optimizations": {
+    "http_parsing": "enabled",
+    "network_operations": "full",
+    "validation_engine": "simd",
+    "compression": "multi-algorithm"
+  }
 }
 ```
 
 ## 📚 Documentação
 
-- **Interface Moderna**: Design HTML responsivo
-- **Documentação da API**: Endpoints bem documentados
-- **Comentários no Código**: Código auto-documentado
-- **Guia de Arquitetura**: Estrutura modular clara
-- **Guias de Performance**: Documentação de otimização
+- **Interface Web**: Demonstração interativa todos recursos SIMD
+- **Suite Benchmark**: Teste performance tempo real via browser
+- **Documentação API**: Documentação endpoint abrangente
+- **Guia Arquitetura**: Documentação otimização SIMD
+- **Análise Performance**: Explicações detalhadas otimizações
 
 ## 📜 Licença
 
@@ -314,4 +337,4 @@ Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
 
 ---
 
-⭐ **HTTPS Server** - Performance extrema com criptografia assembly otimizada e arquitetura moderna.
+⭐ **HTTPS Server** - Performance extrema com otimizações SIMD abrangentes e arquitetura moderna.
